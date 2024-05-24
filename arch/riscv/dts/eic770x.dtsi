@@ -567,6 +567,8 @@
 			clock-frequency = <200000000>;
 			reg = <0x0 0x50900000 0x0 0xffff>;
 			reg-names = "control";
+			reg-shift = <2>;
+			reg-io-width = <2>;
 		};
 		uart1: serial@50910000 {
 			status = "disabled";
@@ -574,6 +576,8 @@
 			clock-frequency = <200000000>;
 			reg = <0x0 0x50910000 0x0 0xffff>;
 			reg-names = "control";
+			reg-shift = <2>;
+			reg-io-width = <2>;
 		};
 		eth0: ethernet@50400000 {
 			compatible = "eswin,eth-eqos";
