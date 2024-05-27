@@ -464,6 +464,44 @@
 			};
 		#endif
 		};
+		mswi0: mswi@02000000 {
+			status = "disabled";
+			compatible = "thead,c900-aclint-mswi";
+			interrupts-extended = <&cpu0_intc 3
+					       &cpu1_intc 3
+					       &cpu2_intc 3
+					       &cpu3_intc 3>;
+			reg = <0x0 0x02000000 0x0 0x04000>;
+		};
+		mswi1: mswi@22000000 {
+			status = "disabled";
+			compatible = "thead,c900-aclint-mswi";
+			interrupts-extended = <&cpu4_intc 3
+					       &cpu5_intc 3
+					       &cpu6_intc 3
+					       &cpu7_intc 3>;
+			reg = <0x0 0x22000000 0x0 0x04000>;
+		};
+		mtimer0: mtimer@02004000 {
+			status = "disabled";
+			compatible = "thead,c900-aclint-mtimer";
+			interrupts-extended = <&cpu0_intc 7
+					       &cpu1_intc 7
+					       &cpu2_intc 7
+					       &cpu3_intc 7>;
+			reg = <0x0 0x0200bff8 0x0 0x00008
+			       0x0 0x02004000 0x0 0x07ff8>;
+		};
+		mtimer1: mtimer@22004000 {
+			status = "disabled";
+			compatible = "thead,c900-aclint-mtimer";
+			interrupts-extended = <&cpu0_intc 7
+					       &cpu1_intc 7
+					       &cpu2_intc 7
+					       &cpu3_intc 7>;
+			reg = <0x0 0x2200bff8 0x0 0x00008
+			       0x0 0x22004000 0x0 0x07ff8>;
+		};
 		plic0: interrupt-controller@c000000 {
 			status = "disabled";
 			#interrupt-cells = <1>;
