@@ -120,6 +120,12 @@
 &cpu3 {
 	status = "okay";
 };
+&mswi0 {
+        status = "okay";
+};
+&mtimer0 {
+        status = "okay";
+};
 &plic0{
 	status = "okay";
 };
