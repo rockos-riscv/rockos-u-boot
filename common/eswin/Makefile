@@ -4,5 +4,4 @@
 
 obj-$(CONFIG_CMD_ESWUPDATE) += eswupdate/
 obj-$(CONFIG_CMD_ESWOTP) += eswotp/
-obj-$(CONFIG_CMD_ES_MKFSFAT) += dosfstools/
 obj-$(CONFIG_CMD_ESWUPDATE) += lib/
