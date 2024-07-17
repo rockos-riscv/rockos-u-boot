@@ -10,7 +10,7 @@
 
 #include <linux/sizes.h>
 
-#define CFG_MALLOC_F_ADDR   0xf0000000
+#define CONFIG_STANDALONE_LOAD_ADDR 0x80200000
 // #define CONFIG_BOOT_SATA
 
 /* Environment options */
@@ -20,85 +20,33 @@
 
 #include <config_distro_bootcmd.h>
 
-#define COMMON_ENV \
+#define CFG_EXTRA_ENV_SETTINGS \
+    "fdtfile=" CONFIG_DEFAULT_FDT_FILE "\0" \
+    "bootdelay=5\0" \
     "fdt_high=0xffffffffffffffff\0" \
     "initrd_high=0xffffffffffffffff\0" \
     "kernel_addr_r=0x84000000\0" \
+    "kernel_comp_addr_r=0x98300000\0" \
+    "kernel_comp_size=0x10000000\0" \
+    "boot_conf_addr_r=0xc0000000\0" \
     "fdt_addr_r=0x88000000\0" \
     "scriptaddr=0x88100000\0" \
     "pxefile_addr_r=0x88200000\0" \
     "ramdisk_addr_r=0x88300000\0" \
+    "uuid_rootfsA=80a5a8e9-c744-491a-93c1-4f4194fd690a\0" \
+    "uuid_swap=5ebcaaf0-e098-43b9-beef-1f8deedd135e\0" \
+    "partitions=name=misc,start=1MiB,size=512KiB;name=env,size=512KiB;name=vendor,size=1MiB;name=boot,start=5MiB,size=500MiB,type=boot;name=swap,size=4096MiB,type=swap,uuid=${uuid_swap};name=root,size=-,type=linux,uuid=${uuid_rootfsA}\0" \
+    "gpt_partition=gpt write mmc ${emmc_dev} $partitions\0" \
+    "emmc_dev=0\0" \
+    "mmcbootpart=4\0" \
+    "boot_conf_file=/extlinux/extlinux.conf\0" \
     "stdin=serial,usbkbd\0" \
     "stderr=serial,vidconsole\0" \
-    "stdout=serial,vidconsole\0" \
-    "kernel_comp_addr_r=0x180000000\0" \
-    "kernel_comp_size=0x4000000\0"
-
-#define MMC_ENV \
-    "emmc_dev=0\0" \
-    "partitions=name=misc,start=1MiB,size=512KiB;name=env,size=512KiB;name=boot,size=100MiB;name=rootfs,size=30GiB;name=userdata,size=-;\0" \
-    "gpt_partition=gpt write mmc ${emmc_dev} $partitions\0" \
-    "mmcroot=/dev/mmcblk0p4 rootfstype=ext4 rootwait\0" \
-    "loadimage=fatload mmc 0#boot 0x90000000 fitimage\0"
-
-#define SATA_ENV \
-    "sata_init=sata init\0" \
-    "loadimage=fatload sata 0:1 0x90000000 fitimage\0"
-
-#if !CONFIG_BOOT_NFS
-#ifndef CONFIG_BOOT_SATA
-#define CFG_EXTRA_ENV_SETTINGS \
-    "bootdelay=2\0" \
-    COMMON_ENV \
-    MMC_ENV \
-    "bootusb=echo Not usb_update!\0" \
-    "mmcargs=setenv bootargs root=${mmcroot}\0" \
-    "addargs=setenv bootargs ${bootargs} video=mxcfb1\0" \
-    "mmcboot=echo Booting from mmc ...;" \
-            "run mmcargs; " \
-            "run addargs; " \
-            "run loadimage\0" \
-    "bootkernel=bootm 0x90000000 \0"
-#else
-#define CFG_EXTRA_ENV_SETTINGS \
-    "bootdelay=2\0" \
-    COMMON_ENV \
-    SATA_ENV \
-    "sataboot=echo Booting from sata ...;" \
-            "run sata_init; " \
-            "run loadimage\0" \
-    "bootkernel=bootm 0x90000000 \0"
-#endif
-#else
-#define CFG_EXTRA_ENV_SETTINGS \
-    "bootdelay=2\0" \
-    COMMON_ENV \
-    MMC_ENV \
-    "serverip="CONFIG_TFTP_SERVERIP"\0" \
-    "nfsargs=setenv bootargs root=/dev/nfs init=/linuxrc ip=dhcp nfsroot="CONFIG_ROOTFS_NFS_PATH"/${board_info}/rootfs,proto=tcp,nfsvers=3,nolock\0" \
-    "setimageload=setenv loadimage dhcp 0x90000000 ${board_info}/fitImage\0" \
-    "nfsboot=echo Set nfs parameter ...;" \
-            "run nfsargs;" \
-            "run setimageload;" \
-            "run loadimage\0" \
-    "bootkernel=bootm 0x90000000 \0"
-#endif /* !CONFIG_BOOT_NFS */
+    "stdout=serial,vidconsole\0"
     //BOOTENV
 #undef CONFIG_BOOTCOMMAND
-#if !CONFIG_BOOT_NFS
-#ifndef CONFIG_BOOT_SATA
+
 #define CONFIG_BOOTCOMMAND \
-    "run mmcboot;" \
-    "run bootkernel;"
-#else
-#define CONFIG_BOOTCOMMAND \
-    "run sataboot;" \
-    "run bootkernel;"
-#endif
-#else
-#define CONFIG_BOOTCOMMAND \
-    "run nfsboot;" \
-    "run bootkernel;"
-#endif /* !CONFIG_BOOT_NFS */
+    "sysboot mmc ${emmc_dev}:${mmcbootpart} any $boot_conf_addr_r $boot_conf_file;" \
 
 #endif /* __CONFIG_H */
