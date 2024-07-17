@@ -108,5 +108,6 @@ CONFIG_CONSOLE_NORMAL=y
 CONFIG_VIDEO_ANSI=y
 CONFIG_USB_KEYBOARD=y
 CONFIG_USE_PREBOOT=y
+CONFIG_DEFAULT_FDT_FILE="eswin/hifive-premier-550.dtb"
 CONFIG_SYS_64BIT_LBA=y
 CONFIG_PREBOOT="setenv fdt_addr ${fdtcontroladdr};fdt addr ${fdtcontroladdr};usb start"
