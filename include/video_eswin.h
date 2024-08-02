@@ -9,8 +9,8 @@
 
 #ifndef CONFIG_ESWIN_LOGO_DISPLAY
 #ifdef CONFIG_DRM_ESWIN_DW_HDMI
- #define DRM_ESWIN_FB_WIDTH             960
- #define DRM_ESWIN_FB_HEIGHT            540
+ #define DRM_ESWIN_FB_WIDTH             1920
+ #define DRM_ESWIN_FB_HEIGHT            1080
  #define DRM_ESWIN_FB_BPP               VIDEO_BPP16
 #else
  #define DRM_ESWIN_FB_WIDTH             1080
