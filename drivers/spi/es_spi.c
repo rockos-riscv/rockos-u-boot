@@ -131,8 +131,8 @@ typedef enum {
 #define SPINOR_OP_WRSR		0x01	/* Write status register 1 byte */
 #define SPINOR_OP_RDSR2		0x35	/* Read status register 2 */
 #define SPINOR_OP_WRSR2		0x31	/* Write status register 2 */
-#define SPINOR_OP_RDSR3		0x15	/* Read status register 2 */
-#define SPINOR_OP_WRSR3		0x11	/* Write status register 2 */
+#define SPINOR_OP_RDSR3		0x15	/* Read status register 3 */
+#define SPINOR_OP_WRSR3		0x11	/* Write status register 3 */
 
 #define SPINOR_OP_READ		0x03	/* Read data bytes (low frequency) */
 #define SPINOR_OP_READ_FAST	0x0b	/* Read data bytes (high frequency) */
@@ -159,13 +159,15 @@ typedef enum {
 #define SPINOR_OP_CLFSR		0x50	/* Clear flag status register */
 #define SPINOR_OP_RDEAR		0xc8	/* Read Extended Address Register */
 #define SPINOR_OP_WREAR		0xc5	/* Write Extended Address Register */
+#define SPINOR_BLOCK_LOCK		0x36	/* Individual Block/Sector Lock */
+#define SPINOR_BLOCK_UNLOCK		0x39	/* Individual Block/Sector UnLock */
+#define SPINOR_GLOBAL_BLOCK_LOCK		0x7E	/* global Block/Sector UnLock */
+#define SPINOR_GLOBAL_BLOCK_UNLOCK		0x98	/* global Block/Sector UnLock */
 
 #define SPIC_CMD_CODE_POWER_DOWN              0xb9
 #define SPIC_CMD_CODE_RELEASE_POWER_DOWN      0xab
 #define SPIC_CMD_CODE_ENABLE_RESET            0x66
 #define SPIC_CMD_CODE_RESET                   0x99
-
-
 
 struct es_spi_plat {
 	s32 frequency;		/* Default clock frequency, -1 for none */
@@ -744,7 +746,26 @@ void es_write_flash_status_register(struct es_spi_priv *priv, uint8_t register_d
 	//printf("[%s %d]: command 0x%x, status register_data 0x%x\n",__func__,__LINE__, command, register_data);
 }
 
-void es_flash_write_protection_cfg(int enable)
+void es_write_flash_global_block_lock_register(struct es_spi_priv *priv, int flash_cmd)
+{
+	u32 command;
+
+	//Flash global block lock register not need data
+	spi_read_write_cfg(priv, 1, 0);
+
+	command = es_read(priv, ES_SPI_CSR_06);
+	command &= ~((0xFF << 6) | (0x1 << 5) | (0xF << 1) | 0x1);
+	command |= ((flash_cmd << SPI_COMMAND_CODE_FIELD_POSITION) |
+			(SPI_COMMAND_MOVE_VALUE << SPI_COMMAND_MOVE_FIELD_POSITION) |
+			(SPIC_CMD_TYPE_CHIP_ERASE << SPI_COMMAND_TYPE_FIELD_POSITION) | SPI_COMMAND_VALID);
+	es_write(priv, ES_SPI_CSR_06, command);
+
+	//Wait command finish
+	spi_wait_over(priv);
+	//printf("[%s %d]: command 0x%x\n",__func__,__LINE__, command);
+}
+
+void es_flash_global_wp_cfg(int enable)
 {
 	uint8_t register_data, request_register_data;
 	struct es_spi_priv *priv = &g_priv;
@@ -753,21 +774,88 @@ void es_flash_write_protection_cfg(int enable)
 
 	//Update status register1
 	es_read_flash_status_register(priv, &register_data, SPINOR_OP_RDSR);
-	/*
-	  SRP SEC TB BP2 BP1 BP0 WEL BUSY
-	 */
-	if (enable) {
-		request_register_data = register_data | ((1 << 2) | (1 << 3) | (1 << 4) | (1 << 7));
-		priv->wp_enabled = 1;
-	} else {
-		request_register_data = register_data & (~((1 << 2) | (1 << 3) | (1 << 4) | (1 << 7)));
-		priv->wp_enabled = 0;
-	}
+	request_register_data = register_data;
+		/*
+			  SRP SEC TB BP2 BP1 BP0 WEL BUSY
+	 	*/
+	request_register_data |= (1 << 5);  //TB 1, bottom
+	//request_register_data &= ~(1 << 5);  //TB 0, top
+	request_register_data &= ~(1 << 6);  // SEC 0, 64K
 	if (request_register_data != register_data) {
 		es_write_flash_status_register(priv, request_register_data, SPINOR_OP_WRSR);
 	}
-	//es_read_flash_status_register(priv, &register_data, SPINOR_OP_RDSR);
+
+	//Update status register3
+	es_read_flash_status_register(priv, &register_data, SPINOR_OP_RDSR3);
+	request_register_data = register_data;
+		/*
+			  R DRV1 DRV0 R R WPS R R
+	 	*/
+	request_register_data |= (1 << 2);   //WPS 1, individual block
+	if (request_register_data != register_data) {
+		es_write_flash_status_register(priv, request_register_data, SPINOR_OP_WRSR3);
+	}
+
+	//Update global lock/unlock register
+	if (enable) {
+		es_write_flash_global_block_lock_register(priv, SPINOR_GLOBAL_BLOCK_LOCK);
+	} else {
+		es_write_flash_global_block_lock_register(priv, SPINOR_GLOBAL_BLOCK_UNLOCK);
+	}
 	es_external_cs_manage(priv, true);
+}
+
+void es_write_flash_individual_block_lock_register(void *addr, int flash_cmd)
+{
+	u32 command;
+	struct es_spi_priv *priv = &g_priv;
+
+	spi_read_write_cfg(priv, 3, addr);
+
+	command = es_read(priv, ES_SPI_CSR_06);
+	command &= ~((0xFF << 6) | (0x1 << 5) | (0xF << 1) | 0x1);
+	command |= ((flash_cmd << SPI_COMMAND_CODE_FIELD_POSITION) |
+			(SPI_COMMAND_MOVE_VALUE << SPI_COMMAND_MOVE_FIELD_POSITION) |
+			(SPIC_CMD_TYPE_BLOCK_ERASE_TYPE2 << SPI_COMMAND_TYPE_FIELD_POSITION) | SPI_COMMAND_VALID);
+
+	es_write(priv, ES_SPI_CSR_06, command);
+
+	//Wait command finish
+	spi_wait_over(priv);
+
+	//printf("[%s %d]: command 0x%x, addr 0x%px, flash_cmd 0x%x\n",__func__,__LINE__,
+	//	command, addr, flash_cmd);
+}
+
+#define ALIGNMENT_SIZE 0x10000    // 64KB alignment
+int es_flash_region_wp_cfg(void *addr, int size, bool lock)
+{
+	uint32_t i;
+	int flash_cmd;
+	struct es_spi_priv *priv = &g_priv;
+
+	// Check if the address is 64KB aligned
+	if ((uintptr_t)addr % ALIGNMENT_SIZE != 0) {
+		printf("error: addr 0x%px is not aligned to 64KB\n", addr);
+		return -1;
+	}
+
+	// Check if the size is 64KB aligned
+	if (size % ALIGNMENT_SIZE != 0) {
+		printf("error: size 0x%d is not aligned to 64KB\n", size);
+		return -2;
+	}
+
+	flash_cmd = lock ? SPINOR_BLOCK_LOCK : SPINOR_BLOCK_UNLOCK;
+
+	es_external_cs_manage(priv, false);
+
+	for (i = 0; i < size; i += ALIGNMENT_SIZE) {
+		es_write_flash_individual_block_lock_register(addr + i, flash_cmd);
+	}
+
+	es_external_cs_manage(priv, true);
+	return 0;
 }
 
 /*
@@ -781,13 +869,15 @@ void es_bootspi_wp_cfg(int enable)
 	struct es_spi_priv *priv = &g_priv;
 
 	if (enable) {
-		es_flash_write_protection_cfg(enable);
+		es_flash_global_wp_cfg(enable);
 		dm_gpio_set_value(priv->wp_gpio, enable); //gpio output low, enable protection
+		priv->wp_enabled = 1;
 	} else {
 		dm_gpio_set_value(priv->wp_gpio, enable); //gpio output high, disable protection
-		es_flash_write_protection_cfg(enable);
+		es_flash_global_wp_cfg(enable);
+		priv->wp_enabled = 0;
 	}
-	// printf("Bootspi flash write protection %s\n", enable ? "enabled" : "disabled");
+	printf("Bootspi flash write protection %s\n", enable ? "enabled" : "disabled");
 }
 
 int es_bootspi_write_protection_init(void)
@@ -884,7 +974,7 @@ static int es_spi_exec_op(struct spi_slave *slave, const struct spi_mem_op *op)
 			priv->cmd_type = SPIC_CMD_TYPE_SPI_PROGRAM;
 			break;
 	}
-
+	/*
 	if (g_priv.wp_enabled) {
 		switch(priv->opcode) {
 			case SPINOR_OP_BE_4K:
@@ -900,7 +990,7 @@ static int es_spi_exec_op(struct spi_slave *slave, const struct spi_mem_op *op)
 				return -EACCES;
 		}
 	}
-
+	*/
 	// dev_err(bus, "opcode = %x cmd_type %x\n", priv->opcode, priv->cmd_type);
 	es_external_cs_manage(priv, false);
 
@@ -1002,7 +1092,6 @@ static const struct dm_spi_ops es_spi_ops = {
 
 static const struct udevice_id es_spi_ids[] = {
 	/* Generic compatible strings */
-
 	{ .compatible = "eswin,es-apb-spi-1.0", .data = (ulong)es_spi_dwc_init },
 };
 
@@ -1042,3 +1131,34 @@ U_BOOT_CMD(
 	"<0|1> - 0 to disable, 1 to enable write protection"
 );
 
+static int do_spi_region_wp(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
+{
+	if (argc != 4) {
+		printf("Usage: spi_region_wp <addr> <size> <enable>\n");
+		return CMD_RET_USAGE;
+	}
+
+	void *addr = (void *)simple_strtoul(argv[1], NULL, 16);
+	int size = simple_strtoul(argv[2], NULL, 16);
+	bool lock = simple_strtoul(argv[3], NULL, 16);
+
+	int ret = es_flash_region_wp_cfg(addr, size, lock);
+	if (ret == 0) {
+		printf("SPI region 0x%px-0x%px write protection %s succeeded.\n",
+			addr, addr + size , lock ? "enable" : "disable");
+	} else {
+		printf("SPI region 0x%px-0x%px write protection %s failed with error code %d.\n",
+			addr, addr + size, ret, lock ? "enable" : "disable");
+	}
+
+	return ret == 0 ? CMD_RET_SUCCESS : CMD_RET_FAILURE;
+}
+
+U_BOOT_CMD(
+	bootspi_region_wp, 4, 0, do_spi_region_wp,
+	"Enable/Disable write protection for boot spi flash region",
+	"<addr> <size> <lock>\n"
+	"    - addr: start address (hex, 64K aligned)\n"
+	"    - size: size in bytes (hex, 64K aligned)\n"
+	"    - enable: 1 to enable, 0 to disable\n"
+);
