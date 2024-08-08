@@ -446,7 +446,7 @@ int blk_get_device_by_str(const char *ifname, const char *dev_hwpart_str,
 
 	dev = hextoul(dev_str, &ep);
 	if (*ep) {
-		printf("** Bad device specification %s %s **\n",
+		debug("** Bad device specification %s %s **\n",
 		       ifname, dev_str);
 		dev = -EINVAL;
 		goto cleanup;
@@ -561,7 +561,7 @@ int blk_get_device_part_str(const char *ifname, const char *dev_part_str,
 	/* Look up the device */
 	dev = blk_get_device_by_str(ifname, dev_str, desc);
 	if (dev < 0) {
-		printf("** Bad device specification %s %s **\n",
+		debug("** Bad device specification %s %s **\n",
 		       ifname, dev_str);
 		ret = dev;
 		goto cleanup;
@@ -801,7 +801,7 @@ int part_get_info_by_dev_and_name_or_num(const char *dev_iface,
 	ret = blk_get_device_part_str(dev_iface, dev_part_str, desc, part_info,
 				      allow_whole_dev);
 	if (ret < 0)
-		printf("Couldn't find partition %s %s\n",
+		debug("Couldn't find partition %s %s\n",
 		       dev_iface, dev_part_str);
 	return ret;
 }

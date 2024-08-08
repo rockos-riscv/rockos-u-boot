@@ -197,7 +197,7 @@ static int do_part_set(int argc, char *const argv[])
 	typestr = argv[2];
 	dev = blk_get_device_by_str(devname, partstr, &desc);
 	if (dev < 0) {
-		printf("** Bad device specification %s %s **\n", devname,
+		debug("** Bad device specification %s %s **\n", devname,
 		       partstr);
 		return CMD_RET_FAILURE;
 	}
