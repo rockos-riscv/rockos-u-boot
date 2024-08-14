@@ -33,6 +33,7 @@
 	cpus {
 		#address-cells = <1>;
 		#size-cells = <0>;
+		timebase-frequency = <RTCCLK_FREQ>;
 		cpu0: cpu@0 {
 			clock-frequency = <0>;
 			compatible = "eic7700", "riscv";
@@ -51,7 +52,6 @@
 			reg = <0>;
 			riscv,isa = "rv64imafdc_zba_zbb";
 			status = "disabled";
-			timebase-frequency = <RTCCLK_FREQ>;
 			tlb-split;
 			cpu0_intc: interrupt-controller {
 				#interrupt-cells = <1>;
@@ -77,7 +77,6 @@
 			reg = <0x1>;
 			riscv,isa = "rv64imafdc_zba_zbb";
 			status = "disabled";
-			timebase-frequency = <RTCCLK_FREQ>;
 			tlb-split;
 			cpu1_intc: interrupt-controller {
 				#interrupt-cells = <1>;
@@ -103,7 +102,6 @@
 			reg = <0x2>;
 			riscv,isa = "rv64imafdc_zba_zbb";
 			status = "disabled";
-			timebase-frequency = <RTCCLK_FREQ>;
 			tlb-split;
 			cpu2_intc: interrupt-controller {
 				#interrupt-cells = <1>;
@@ -129,7 +127,6 @@
 			reg = <0x3>;
 			riscv,isa = "rv64imafdc_zba_zbb";
 			status = "disabled";
-			timebase-frequency = <RTCCLK_FREQ>;
 			tlb-split;
 			cpu3_intc: interrupt-controller {
 				#interrupt-cells = <1>;
@@ -155,7 +152,6 @@
 			reg = <0x4>;
 			riscv,isa = "rv64imafdc_zba_zbb";
 			status = "disabled";
-			timebase-frequency = <RTCCLK_FREQ>;
 			tlb-split;
 			cpu4_intc: interrupt-controller {
 				#interrupt-cells = <1>;
@@ -181,7 +177,6 @@
 			reg = <0x5>;
 			riscv,isa = "rv64imafdc_zba_zbb";
 			status = "disabled";
-			timebase-frequency = <RTCCLK_FREQ>;
 			tlb-split;
 			cpu5_intc: interrupt-controller {
 				#interrupt-cells = <1>;
@@ -207,7 +202,6 @@
 			reg = <0x6>;
 			riscv,isa = "rv64imafdc_zba_zbb";
 			status = "disabled";
-			timebase-frequency = <RTCCLK_FREQ>;
 			tlb-split;
 			cpu6_intc: interrupt-controller {
 				#interrupt-cells = <1>;
@@ -233,7 +227,6 @@
 			reg = <0x7>;
 			riscv,isa = "rv64imafdc_zba_zbb";
 			status = "disabled";
-			timebase-frequency = <RTCCLK_FREQ>;
 			tlb-split;
 			cpu7_intc: interrupt-controller {
 				#interrupt-cells = <1>;
