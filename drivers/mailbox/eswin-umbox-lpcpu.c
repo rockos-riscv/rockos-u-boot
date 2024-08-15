@@ -35,6 +35,11 @@
 #define FW_FILE_IMG   "/lib/firmware/eic7x/lpcpu_fw.bin"
 #define BOOT_FILE_IMG   "/lib/firmware/eic7x/lpcpu_boot.bin"
 #define LPCPU_FW_LOAD_ADDR  0xDFFF0000
+/*
+ * Cause emmc dma cannot access address 0x58800000, so load fw to ddr fist,
+ * then copy fw to 0x58800000
+ */
+#define LPCPU_BOOT_FW_LOAD_DDR_ADDR  0x90000000
 #define LPCPU_BOOT_FW_LOAD_ADDR  0x58800000
 #define FW_LOAD_SUCC   0xacce55
 #define DDR_BASE			0x80000000
@@ -418,6 +423,7 @@ static int eswin_umbox_probe(struct udevice *dev)
     const char *filename;
     unsigned long time;
     unsigned long fw_addr;
+	unsigned long fw_ddr_addr;
     uint64_t len_read;
     int32_t ret = 0;
 
@@ -478,14 +484,16 @@ static int eswin_umbox_probe(struct udevice *dev)
 		return -1;
 	}
     filename = FW_FILE_IMG;
-    fw_addr = LPCPU_BOOT_FW_LOAD_ADDR;
+    fw_ddr_addr = LPCPU_BOOT_FW_LOAD_DDR_ADDR;
     time = get_timer(0);
-	ret = fs_read(filename, fw_addr, 0, 0, &len_read);
+	ret = fs_read(filename, fw_ddr_addr, 0, 0, &len_read);
 	time = get_timer(time);
 	if (ret < 0) {
 		log_err("Failed to load '%s'\n", filename);
 		return -1;
 	}
+	fw_addr = LPCPU_BOOT_FW_LOAD_ADDR;
+	memcpy((void *)fw_addr, (void *)fw_ddr_addr, len_read);
 
     // printf("Lpcpu firmware read in %lu ms\n", time);
 

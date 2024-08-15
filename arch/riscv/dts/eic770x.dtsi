@@ -692,7 +692,6 @@
 			reg = <0x0 0x50460000 0x0 0x10000>;
 			max-frequency = <208000000>;
 			bus-width = <4>;
-			sdhci-caps-mask = <0x4 0x0>;
 			index = <1>;
 			status = "disabled";
 		};

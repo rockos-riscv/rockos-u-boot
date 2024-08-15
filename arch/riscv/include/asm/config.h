@@ -7,4 +7,8 @@
 #ifndef _ASM_CONFIG_H_
 #define _ASM_CONFIG_H_
 
+//sd
+#define __SD_UHS  1
+#define __SD_SDR104 1
+
 #endif

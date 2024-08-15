@@ -548,10 +548,10 @@ static int do_mmc_dev(struct cmd_tbl *cmdtp, int flag,
 
 	if (argc == 1) {
 		dev = curr_device;
-		mmc = init_mmc_device(dev, true);
+		mmc = init_mmc_device(dev, false);
 	} else if (argc == 2) {
 		dev = (int)dectoul(argv[1], NULL);
-		mmc = init_mmc_device(dev, true);
+		mmc = init_mmc_device(dev, false);
 	} else if (argc == 3) {
 		dev = (int)dectoul(argv[1], NULL);
 		part = (int)dectoul(argv[2], NULL);
@@ -560,7 +560,7 @@ static int do_mmc_dev(struct cmd_tbl *cmdtp, int flag,
 			       PART_ACCESS_MASK);
 			return CMD_RET_FAILURE;
 		}
-		mmc = init_mmc_device(dev, true);
+		mmc = init_mmc_device(dev, false);
 	} else if (argc == 4) {
 		enum bus_mode speed_mode;
 
@@ -572,7 +572,7 @@ static int do_mmc_dev(struct cmd_tbl *cmdtp, int flag,
 			return CMD_RET_FAILURE;
 		}
 		speed_mode = (int)dectoul(argv[3], NULL);
-		mmc = __init_mmc_device(dev, true, speed_mode);
+		mmc = __init_mmc_device(dev, false, speed_mode);
 	} else {
 		return CMD_RET_USAGE;
 	}

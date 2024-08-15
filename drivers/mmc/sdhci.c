@@ -391,9 +391,12 @@ int sdhci_set_clock(struct mmc *mmc, unsigned int clock)
 
 	sdhci_writew(host, 0, SDHCI_CLOCK_CONTROL);
 
-	if (clock == 0)
+	if (clock == 0) {
+		if (host->ops && host->ops->set_clock) {
+			host->ops->set_clock(host, div);
+		}
 		return 0;
-
+	}
 	if (host->ops && host->ops->set_delay) {
 		ret = host->ops->set_delay(host);
 		if (ret) {
