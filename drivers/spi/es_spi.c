@@ -1148,7 +1148,7 @@ static int do_spi_region_wp(struct cmd_tbl *cmdtp, int flag, int argc, char * co
 			addr, addr + size , lock ? "enable" : "disable");
 	} else {
 		printf("SPI region 0x%px-0x%px write protection %s failed with error code %d.\n",
-			addr, addr + size, ret, lock ? "enable" : "disable");
+			addr, addr + size, lock ? "enable" : "disable", ret);
 	}
 
 	return ret == 0 ? CMD_RET_SUCCESS : CMD_RET_FAILURE;

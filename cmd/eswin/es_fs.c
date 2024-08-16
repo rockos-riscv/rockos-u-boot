@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <blk.h>
 #include <mmc.h>
+#include <sata.h>
 #include <memalign.h>
 #include <asm/io.h>
 #include <cpu_func.h>
@@ -19,12 +20,11 @@
 #include <linux/math64.h>
 #include <display_options.h>
 
-static struct blk_desc *mmc_dev_desc;
-
-static struct mmc *__init_mmc_device(int dev, bool force_init,
+static struct blk_desc *__init_mmc_device(int dev, bool force_init,
 				     enum bus_mode speed_mode)
 {
-	struct mmc *mmc;
+	struct mmc *mmc = NULL;
+	struct blk_desc *desc = NULL;
 	mmc = find_mmc_device(dev);
 	if (!mmc) {
 		printf("no mmc device at slot %x\n", dev);
@@ -47,8 +47,10 @@ static struct mmc *__init_mmc_device(int dev, bool force_init,
 	struct blk_desc *bd = mmc_get_blk_desc(mmc);
 	blkcache_invalidate(bd->uclass_id, bd->devnum);
 #endif
-
-	return mmc;
+	desc = mmc_get_blk_desc(mmc);
+	if (!desc)
+		return NULL;
+	return desc;
 }
 
 int get_size(const char *ifname, const char *dev_part_str, const char *fname, loff_t *size)
@@ -84,41 +86,62 @@ static int do_image_write(int argc, char *const argv[])
 {
 	const char *r_ifname = NULL;
 	const char *r_dev_part_str = NULL;
-	const char *w_ifname = "mmc";
+	const char *w_ifname = NULL;
 	const char *filename = NULL;
 	uint8_t *buf = NULL;
 	uint64_t buf_size = BUF_SIZE, len_read;
 	uint64_t file_size = 0, file_offset = 0;
-	uint64_t cnt =0, emmc_offset = 0;
+	uint64_t cnt =0, write_offset = 0;
 	uint64_t currentIndex = 0, n;
-	struct mmc *mmc;
 	int dev = -1;
 	int32_t ret = 0;
+	enum uclass_id uclass_id;
+	struct blk_desc *desc;
 
-	if (argc != 5)
+if (argc != 6)
 		return CMD_RET_USAGE;
 
 	r_ifname = argv[1];
 	r_dev_part_str = argv[2];
 	filename = argv[3];
-	dev = (int)dectoul(argv[4], NULL);
+	w_ifname = argv[4];
+	dev = (int)dectoul(argv[5], NULL);
 
 	if(get_size(r_ifname, r_dev_part_str, filename, &file_size)) {
 		printf("Error: %s not found\n", filename);
 		return CMD_RET_FAILURE;
 	}
-	mmc = __init_mmc_device(dev, false, MMC_MODES_END);
-	if (!mmc)
-		return CMD_RET_FAILURE;
-	if (mmc_getwp(mmc) == 1) {
-		printf("Error: card is write protected!\n");
+
+	if (!strcmp(w_ifname, "mmc")) {
+		desc = __init_mmc_device(dev, false, MMC_MODES_END);
+		if (!desc)
+			return CMD_RET_FAILURE;
+	} else if (!strcmp(w_ifname, "sata")) {
+		if (dev == -1) {
+			ret = sata_probe(dev);
+			if (ret) {
+				ret = -CMD_RET_FAILURE;
+				goto out;
+			}
+		}
+		uclass_id = UCLASS_AHCI;
+
+		ret = blk_get_desc(uclass_id, dev, &desc);
+		if (ret) {
+			ret = -CMD_RET_FAILURE;
+			goto out;
+		}
+	// } else if(!strcmp(w_ifname, "usb")) {
+	} else {
+		printf("Error: device  %s not support\n", w_ifname);
 		return CMD_RET_FAILURE;
 	}
-	if ( file_size >  mmc->capacity_user ) {
-		printf("Error: %s %d partition too small.\r\n", w_ifname, dev);
-		return -ENOENT;
+	if(file_size > desc->blksz * desc->lba) {
+		printf("Error: %s %d too small.\r\n", w_ifname, dev);
+		return CMD_RET_FAILURE;
 	}
-	buf_size = roundup(buf_size, mmc->write_bl_len);
+
+	buf_size = roundup(buf_size, desc->blksz);
 	buf = memalign(64,buf_size);
 	printf("Write progress: %3d%%:\r", 0);
 	do {
@@ -132,9 +155,9 @@ static int do_image_write(int argc, char *const argv[])
 			goto out;
 		}
 
-		emmc_offset = DIV_ROUND_UP(file_offset, mmc->write_bl_len);
-		cnt = DIV_ROUND_UP(buf_size, mmc->write_bl_len);  /* blkcnt */
-		n = blk_dwrite(mmc_get_blk_desc(mmc), emmc_offset, cnt, buf);
+		write_offset = DIV_ROUND_UP(file_offset, desc->blksz);
+		cnt = DIV_ROUND_UP(buf_size, desc->blksz);  /* blkcnt */
+		n = blk_dwrite(desc, write_offset, cnt, buf);
 		if(n != cnt) {
 			printf("Error: %s write failed!\n", w_ifname);
 			ret = -ENXIO;
@@ -154,9 +177,10 @@ static int do_image_write(int argc, char *const argv[])
 	for(int j = 0; j < 100/2; j ++)
 		printf("%s","+");
 	printf("\r\n");
-	printf("%s has been successfully writen in mmc %d\r\n", filename, dev);
+	printf("%s has been successfully writen in %s %d\r\n", filename, w_ifname, dev);
 out:
-	free(buf);
+	if(buf != NULL)
+		free(buf);
 	return 0;
 }
 
@@ -168,41 +192,49 @@ static int do_image_update(int argc, char *const argv[])
 	const char *w_dev_part_str = NULL;
 	const char *filename = NULL;
 	uint8_t *buf = NULL;
-	struct disk_partition mmc_part_info;
+	static struct blk_desc *dev_desc;
+	struct disk_partition part_info;
 	uint64_t buf_size = BUF_SIZE, len_read;
 	uint64_t file_size = 0, file_offset = 0;
-	uint64_t cnt =0, emmc_offset = 0;
+	uint64_t cnt =0, write_offset = 0;
 	uint64_t currentIndex = 0;
 	int32_t ret = 0, n;
 
-	if (argc != 5)
+	if (argc != 6)
 		return CMD_RET_USAGE;
 
 	r_ifname = argv[1];
 	r_dev_part_str = argv[2];
 	filename = argv[3];
-	w_ifname = "mmc";
-	w_dev_part_str = argv[4];
-	// w_ifname = argv[4];
-	// w_dev_part_str = argv[5];
-
+	w_ifname = argv[4];
+	w_dev_part_str = argv[5];
+	if(!strstr(w_dev_part_str, ":") && !strstr(w_dev_part_str, "#"))
+		return CMD_RET_FAILURE;
 	if(get_size(r_ifname, r_dev_part_str, filename, &file_size)) {
 		printf("Error: %s not found\n", filename);
 		return CMD_RET_FAILURE;
 	}
 
+	if (!strcmp(w_ifname, "sata")) {
+		int dev = (int)dectoul(argv[5], NULL);
+		ret = sata_probe(dev);
+		if (ret) {
+			return -CMD_RET_FAILURE;
+		}
+	}
+
 	if (part_get_info_by_dev_and_name_or_num(w_ifname, w_dev_part_str,
-				&mmc_dev_desc, &mmc_part_info,true) < 0) {
+				&dev_desc, &part_info,true) < 0) {
 		printf("Error: Get information of %s %s partition failed!\r\n", w_ifname, w_dev_part_str);
 		return -ENOENT;
 	}
-	cnt = DIV_ROUND_UP(file_size, mmc_part_info.blksz);
-	if ( cnt > mmc_part_info.size ) {
+	cnt = DIV_ROUND_UP(file_size, part_info.blksz);
+	if ( cnt > part_info.size ) {
 		printf("Error: %s %s partition too small.\r\n", w_ifname, w_dev_part_str);
 		return -ENOENT;
 	}
 
-	buf_size = roundup(buf_size, mmc_part_info.blksz);
+	buf_size = roundup(buf_size, part_info.blksz);
 	buf = memalign(64,buf_size);
 	printf("Write progress: %3d%%:\r", 0);
 	do {
@@ -214,9 +246,9 @@ static int do_image_update(int argc, char *const argv[])
 			ret = -ENXIO;
 			goto out;
 		}
-		emmc_offset = DIV_ROUND_UP(file_offset, mmc_part_info.blksz) + mmc_part_info.start;
-		cnt = DIV_ROUND_UP(buf_size, mmc_part_info.blksz);  /* blkcnt */
-		n = blk_dwrite(mmc_dev_desc, emmc_offset, cnt, buf);
+		write_offset = DIV_ROUND_UP(file_offset, part_info.blksz) + part_info.start;
+		cnt = DIV_ROUND_UP(buf_size, part_info.blksz);  /* blkcnt */
+		n = blk_dwrite(dev_desc, write_offset, cnt, buf);
 		if(n != cnt) {
 			printf("Error: %s %s write failed!\n", w_ifname, w_dev_part_str);
 			ret = -ENXIO;
@@ -246,9 +278,8 @@ static int do_esfs(struct cmd_tbl *cmdtp, int flag, int argc,
 {
 	const char *cmd;
 	int ret;
-	if (argc < 6)
+	if (argc < 7)
 		goto usage;
-
 	cmd = argv[1];
 	--argc;
 	++argv;
@@ -268,15 +299,19 @@ usage:
 
 U_BOOT_CMD(
 	es_fs,	7,	0,	do_esfs,
-	"ESWIN write filesystem image file into MMC",
-	"\nes_fs write ifname  dev_part filename dev_num \n"
-	"  - Write System image file(.wic) from {ifname} {dev_part} to mmc {dev_num}\n"
-	"    ifname dev_part : block device and partition\n"
+	"ESWIN write filesystem image file into sata/mmc",
+	"\nes_fs write rifname  dev_part filename wifname dev_num \n"
+	"  - Write System image file(.wic) from {rifname} {dev_part} to {wifname} {dev_num}\n"
+	"    rifname dev_part : block device and partition\n"
 	"    filename : filesystem image file (e.g. xxx.wic)\n"
-	"    dev_num : set write image file mmc device,You can see the devece num for the emmc or sd card in the cmd \"mmc list\"(e.g. 0, 1)\n"
-	"es_fs update ifname  dev_part filename wdev_part\n"
+	"    wifname dev_num : set write image file block device(sata, mmc)\n"
+	"        You can see the devece num for the emmc or sd card in the cmd \"mmc list\"(e.g. 0, 1)\n"
+	"    e.g. : es_fs write usb 0 image.wic sata 0\n"
+	"es_fs update ifname  dev_part filename wifname wdev_part\n"
 	"  - Write File system image file from {ifname} {dev_part} to mmc {dev_part_num}\n"
 	"    ifname dev_part : block device and partition\n"
 	"    filename : filesystem image file (e.g. boot.ext4, root.ext4)\n"
-	"    wdev_part : image file is written to the MMC partition number or name (e.g. 0#boot, 0:1)\n"
+	"    wifname : block device name (sata,mmc)"
+	"    wdev_part : image file is written to the block device partition number or name (e.g. 0#boot, 0:1)\n"
+	"    e.g. : es_fs update usb 0 boot.ext4 sata 0#boot\n"
 );

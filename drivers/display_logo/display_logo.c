@@ -48,19 +48,23 @@ err_no eswin_display_logo_get_logo_data(u8* osdBuf, RESOLUTION_S resolution_osd,
     u8 devType = UCLASS_MMC;
     int devNum = DEVNUM;
     struct blk_desc* dev_desc;
-    u32 ret = 0;
+    u32 ret = RET_OK;
     u8* dataBuf = malloc(picture.blkCnt * picture.blkSize);
 
     if((resolution_osd.w != resolution_pic.w) || (resolution_osd.h != resolution_pic.h))
     {
         printf("display logo : %s : picture resolution is not suit osd resolution, please change picture\n", __func__);
-        return ERR_INVAL;
+        free(dataBuf);
+        ret = ERR_INVAL;
+        goto out;
     }
 
     if(colorFmt_osd != colorFmt_pic)
     {
         printf("display logo : %s : picture colorFmt is not suit osd colorFmt, please change picture\n", __func__);
-        return ERR_INVAL;
+        free(dataBuf);
+        ret = ERR_INVAL;
+        goto out;
     }
 
     dev_desc = blk_get_devnum_by_uclass_id(devType, devNum);
@@ -68,11 +72,15 @@ err_no eswin_display_logo_get_logo_data(u8* osdBuf, RESOLUTION_S resolution_osd,
     if (ret < 0)
     {
         printf("read picture data failed\n");
-        return ERR_UNKNOWN;
+        free(dataBuf);
+        ret = ERR_UNKNOWN;
+        goto out;
     }
     memcpy(osdBuf, dataBuf, resolution_osd.w * resolution_osd.h * colorFmt_osd / 8);
 
-    return RET_OK;
+out:
+    free(dataBuf);
+    return ret;
 }
 
 static int eswin_display_logo_probe(struct udevice *dev)

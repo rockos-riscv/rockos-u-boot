@@ -29,6 +29,7 @@
 #include <net.h>
 #include <stdlib.h>
 #include <init.h>
+#include <spi.h>
 #include <spi_flash.h>
 #include <dm/uclass-internal.h>
 #include <dm/device-internal.h>
@@ -72,6 +73,7 @@ static int get_hardware_board_info(const char *node_name, HardwareBoardInfo_t *g
 	size = sizeof(HardwareBoardInfo_t);
 	memset((uint8_t *)&gHardware_Board_InfoA, 0, size);
 	memset((uint8_t *)&gHardware_Board_InfoB, 0, size);
+	printf("Get board info from flash\n");
 	ret = spi_flash_read(flash, HARDWARE_BOARD_INFO_FLASH_MAIN_OFFSET, size, (void *)&gHardware_Board_InfoA);
 	if(ret) {
 		return ret;
@@ -100,7 +102,7 @@ static int get_hardware_board_info(const char *node_name, HardwareBoardInfo_t *g
 	}
 	return 0;
 }
-void hardware_info_env_set(void)
+int hardware_info_env_set(void)
 {
 	uint8_t mac_addr[6];
 	const char *node_name_d0 = "spi@51800000";
@@ -152,7 +154,6 @@ void hardware_info_env_set(void)
 int misc_init_r(void)
 {
 	struct udevice *dev;
-	int32_t ret;
 
 #ifdef CONFIG_ESWIN_PMP
 	eswin_pmp_init();
@@ -190,7 +191,7 @@ void irq_mux_route(void)
 	*/
 
 	val = 0;
-	writel(val,0x51810000+0x3c0);
+	writel(val,(void *)(0x51810000+0x3c0));
 }
 
 int board_init(void)

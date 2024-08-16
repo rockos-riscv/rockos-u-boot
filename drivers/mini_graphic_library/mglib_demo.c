@@ -76,7 +76,7 @@ int mglib_updateImg_demo(void)
 {
     OSD_INFO_S osd_layer1_info;
     OSD_INFO_S osd_layer2_info;
-    COLOR_FMT_E colorFmt;
+    COLOR_FMT_E colorFmt = ARGB8888;
     u32 progressBar_x, progressBar_y, progressBar_w, progressBar_h;
     err_no ret = RET_OK;
 

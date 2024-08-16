@@ -358,7 +358,7 @@ static void ahci_print_info(struct ahci_uc_priv *uc_priv)
 	printf("flags: "
 		"%s%s%s%s%s%s"
 		"%s%s%s%s%s%s%s\n",
-		cap & (1 << 31) ? "64bit " : "",
+		cap & (1u << 31) ? "64bit " : "",
 		cap & (1 << 30) ? "ncq " : "",
 		cap & (1 << 28) ? "ilck " : "",
 		cap & (1 << 27) ? "stag " : "",

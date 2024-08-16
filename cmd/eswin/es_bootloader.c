@@ -20,6 +20,7 @@
  * Authors: Xiang Xu <xuxiang@eswincomputing.com>
  */
 
+#include <init.h>
 #include <stdlib.h>
 #include <common.h>
 #include <command.h>
@@ -207,12 +208,7 @@ static int es_spi_flash_erase(uint64_t offset, uint64_t size)
 
 	debug_printf("offset : %llx, size %llx  flash->size %x\n",offset, size, flash->size);
 	total_size = DIV_ROUND_UP(size, 0x1000)*0x1000;
-	/* Consistency checking */
-	if (offset + size > flash->size) {
-		printf("ERROR: attempting past flash size (%#x)\n",
-			   flash->size);
-		return 1;
-	}
+
 	debug_printf("offset : %llx, size %llx\n",offset, size);
 
 	package_blk = DIV_ROUND_UP(total_size, BOOTCHAIN_PACKAGE_SIZE);  /* blkcnt */
@@ -270,19 +266,14 @@ static int norflash_write_bootchain(uint64_t src_addr, uint64_t offset, uint64_t
 	int ret = 1;
 	uint64_t package_blk, total_size, write_size, currentIndex = 0;
 
-	/* Consistency checking */
-	if (offset + size > flash->size) {
-		printf("ERROR: attempting past flash size (%#x)\r\n",
-			   flash->size);
-		return ret;
-	}
-
 	debug_printf("offset : %llx, size %llx\r\n",offset, size);
 
 	es_bootspi_wp_cfg(0);
 	ret = es_spi_flash_erase(offset, size);
-	if(ret)
+	if(ret) {
+		es_bootspi_wp_cfg(1);
 		return ret;
+	}
 
 	package_blk = DIV_ROUND_UP(size, BOOTCHAIN_PACKAGE_SIZE); 
 	total_size = size;
@@ -334,8 +325,15 @@ static int es_write_bootchain(uint64_t src_addr, uint64_t offset, uint64_t size)
 {
 	if(flash_stg)
 		emmc_write_bootchain(src_addr, offset, size);
-	else
+	else {
+		/* Consistency checking */
+		if (offset + size > CONFIG_ENV_OFFSET) {
+			printf("ERROR: attempting past flash size (%#x)\r\n",
+				CONFIG_ENV_OFFSET);
+			return -1;
+		}
 		norflash_write_bootchain(src_addr, offset, size);
+	}
 	return 0;
 }
 
