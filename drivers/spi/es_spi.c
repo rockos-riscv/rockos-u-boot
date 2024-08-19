@@ -579,7 +579,7 @@ void es_writer(struct es_spi_priv *priv)
 	{
 		// if(SPIC_CMD_TYPE_SECTOR_ERASE == cmd_type)
 		{
-			spi_read_write_cfg(priv, write_size, offset);
+			spi_read_write_cfg(priv, write_size, (uintptr_t)offset);
 			spi_command_cfg(priv, cmd_code, cmd_type);
 			spi_wait_over(priv);
 		}
@@ -810,7 +810,7 @@ void es_write_flash_individual_block_lock_register(void *addr, int flash_cmd)
 	u32 command;
 	struct es_spi_priv *priv = &g_priv;
 
-	spi_read_write_cfg(priv, 3, addr);
+	spi_read_write_cfg(priv, 3, (uintptr_t)addr);
 
 	command = es_read(priv, ES_SPI_CSR_06);
 	command &= ~((0xFF << 6) | (0x1 << 5) | (0xF << 1) | 0x1);
