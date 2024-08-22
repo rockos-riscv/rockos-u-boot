@@ -146,6 +146,7 @@ int hardware_info_env_set(void)
 	if (!eth_env_get_enetaddr("eth3addr", mac_addr) && is_valid_ethaddr(gHardware_Board_Info.ethernetMAC2)) {
 		eth_env_set_enetaddr("eth3addr", gHardware_Board_Info.ethernetMAC2);
 	}
+	return 0;
 }
 
 
@@ -169,6 +170,7 @@ int misc_init_r(void)
 	if (NULL == env_get("fdtfile")) {
 		env_set("fdtfile","eswin/eic7700-evb-a2.dtb");
 	}
+	env_set_ulong("ram_size", (gd->ram_size / 1024 / 1024 / 1024));
 	return 0;
 }
 

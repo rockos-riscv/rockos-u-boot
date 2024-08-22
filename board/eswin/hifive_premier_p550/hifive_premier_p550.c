@@ -133,6 +133,7 @@ int misc_init_r(void)
 
 	uclass_get_device_by_name(UCLASS_VIDEO, "display-subsystem", &dev);
 
+	env_set_ulong("ram_size", (gd->ram_size / 1024 / 1024 / 1024));
 	return 0;
 }
 
