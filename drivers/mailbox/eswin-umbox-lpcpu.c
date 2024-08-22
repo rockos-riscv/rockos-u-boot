@@ -501,11 +501,6 @@ static int eswin_umbox_probe(struct udevice *dev)
     writel(0x80000000, umbox->tx_base + 0x4);
     writel(0x4, umbox->tx_base + 0x18);
     mdelay(10);
-    ret = eswin_lpcpu_boot_status(umbox);
-    if(ret < 0)
-    {
-		return -1;
-    }
 
 	printf("Finish lpcpu boot\n");
     return 0;
