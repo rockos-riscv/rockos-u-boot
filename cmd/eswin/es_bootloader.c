@@ -327,11 +327,19 @@ static int es_write_bootchain(uint64_t src_addr, uint64_t offset, uint64_t size)
 		emmc_write_bootchain(src_addr, offset, size);
 	else {
 		/* Consistency checking */
-		if (offset + size > CONFIG_ENV_OFFSET) {
-			printf("ERROR: attempting past flash size (%#x)\r\n",
-				CONFIG_ENV_OFFSET);
-			return -1;
-		}
+		#ifdef CONFIG_ENV_IS_IN_SPI_FLASH
+			if (offset + size > CONFIG_ENV_OFFSET) {
+				printf("ERROR: attempting past flash size (%#x)\r\n",
+					CONFIG_ENV_OFFSET);
+				return -1;
+			}
+		#else
+			if (offset + size > flash->size) {
+				printf("ERROR: attempting past flash size (%#x)\n",
+					flash->size);
+				return -1;
+			}
+		#endif
 		norflash_write_bootchain(src_addr, offset, size);
 	}
 	return 0;
