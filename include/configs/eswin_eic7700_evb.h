@@ -37,6 +37,7 @@
     "kernel_comp_size=0x10000000\0" \
     "boot_conf_addr_r=0xc0000000\0" \
     "emmc_dev=0\0" \
+    "mmcbootpart=1\0" \
     "usbupdate=ext4load usb 0 0x90000000 usbupdate.scr;source 0x90000000\0" \
     "sdupdate=ext4load mmc 1:1 0x90000000 sdupdate.scr;source 0x90000000\0" \
     "typeid_efi=C12A7328-F81F-11D2-BA4B-00A0C93EC93B\0" \
@@ -45,11 +46,11 @@
     "uuid_boot=44b7cb94-f58c-4ba6-bfa4-7d2dce09a3a5\0" \
     "uuid_root=80a5a8e9-c744-491a-93c1-4f4194fd690a\0" \
     "uuid_swap=5ebcaaf0-e098-43b9-beef-1f8deedd135e\0" \
-    "partitions=name=boot,start=1MiB,size=512MiB,type=${typeid_efi},uuid=${uuid_boot};name=swap,size=4096MiB,type=${typeid_swap},uuid=${uuid_swap};name=root,size=-,type=${typeid_filesystem},uuid=${uuid_root}\0" \
+    "partitions=name=boot,start=1MiB,size=512MiB,type=${typeid_filesystem},uuid=${uuid_boot};name=swap,size=4096MiB,type=${typeid_swap},uuid=${uuid_swap};name=root,size=-,type=${typeid_filesystem},uuid=${uuid_root}\0" \
     "gpt_partition=gpt write mmc ${emmc_dev} $partitions\0"
 
 #undef CONFIG_BOOTCOMMAND
 #define CONFIG_BOOTCOMMAND \
-    "sysboot mmc ${emmc_dev}:1 any $boot_conf_addr_r $boot_conf_file;"
+    "sysboot mmc ${emmc_dev}:${mmcbootpart} any $boot_conf_addr_r $boot_conf_file;"
 
 #endif /* __CONFIG_H */
