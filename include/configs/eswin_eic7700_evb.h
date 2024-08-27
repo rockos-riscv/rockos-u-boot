@@ -46,7 +46,7 @@
     "uuid_boot=44b7cb94-f58c-4ba6-bfa4-7d2dce09a3a5\0" \
     "uuid_root=80a5a8e9-c744-491a-93c1-4f4194fd690a\0" \
     "uuid_swap=5ebcaaf0-e098-43b9-beef-1f8deedd135e\0" \
-    "partitions=name=boot,start=1MiB,size=512MiB,type=${typeid_filesystem},uuid=${uuid_boot};name=swap,size=4096MiB,type=${typeid_swap},uuid=${uuid_swap};name=root,size=-,type=${typeid_filesystem},uuid=${uuid_root}\0" \
+    "partitions=name=boot,start=1MiB,size=2048MiB,type=${typeid_filesystem},uuid=${uuid_boot};name=swap,size=4096MiB,type=${typeid_swap},uuid=${uuid_swap};name=root,size=-,type=${typeid_filesystem},uuid=${uuid_root}\0" \
     "gpt_partition=gpt write mmc ${emmc_dev} $partitions\0"
 
 #undef CONFIG_BOOTCOMMAND
