@@ -32,7 +32,10 @@
 #include <dm/uclass.h>
 #include <u-boot/crc.h>
 #include <i2c.h>
+#include <spi.h>
+#include <spi_flash.h>
 #include <init.h>
+#include <dm/device-internal.h>
 #ifdef CONFIG_ESWIN_UMBOX
 #include <eswin/eswin-umbox-srvc.h>
 #endif
@@ -52,18 +55,110 @@ typedef struct {
 	uint32_t crc32Checksum;
 	// uint8_t padding[4];
 } __attribute__((packed)) CarrierBoardInfo;
+
+typedef struct som_info{
+	uint32_t magic;
+	uint8_t version;
+	uint16_t id;
+	uint8_t pcb;
+	uint8_t bom_revision;
+	uint8_t bom_variant;
+	uint8_t sn[18];		// 18 bytes of serial number, excluding string terminator
+	uint8_t status;
+	uint32_t crc;
+} __attribute__((packed)) som_info_t;
+
 #define AT24C_ADDR (0x50)
 
 
 #define CBINFO_MAX_SIZE		64
 #define GAP_SIZE		16
 #define USER_MAX_SIZE		96
+
+/* A, B sominfo */
+#define SOM_BOARD_INFO_SIZE	(1024 * 256)
+#define SOM_BOARD_INFO_FLASH_MAIN_OFFSET	0xf80000
+#define SOM_BOARD_INFO_FLASH_BACKUP_OFFSET	(SOM_BOARD_INFO_FLASH_MAIN_OFFSET + SOM_BOARD_INFO_SIZE)
+
 /* A, B cbinfo */
 #define CARRIER_BOARD_INFO_EEPROM_MAIN_OFFSET	0
 #define CARRIER_BOARD_INFO_EEPROM_BACKUP_OFFSET	(CARRIER_BOARD_INFO_EEPROM_MAIN_OFFSET + CBINFO_MAX_SIZE + GAP_SIZE)
 
 #define MAGIC_NUMBER 0x45505EF1
 
+int update_som_info(struct spi_flash *flash, u64 offset, u32 size, const void *buf)
+{
+	int ret = 0;
+	es_flash_region_wp_cfg((void *)offset, SOM_BOARD_INFO_SIZE, 0);
+	ret = spi_flash_erase(flash, offset, SOM_BOARD_INFO_SIZE);
+	if(ret) {
+		goto out;
+	}
+	ret = spi_flash_write(flash, offset, size, buf);
+	if(ret) {
+		goto out;
+	}
+out:
+	es_flash_region_wp_cfg((void *)offset, SOM_BOARD_INFO_SIZE, 1);
+	return ret;
+}
+
+static int get_som_info(const char *node_name)
+{
+	som_info_t gSom_Board_InfoA;
+	som_info_t gSom_Board_InfoB;
+	struct spi_flash *flash = NULL;
+	struct udevice *bus, *dev;
+	uint64_t size = 0;
+	uint32_t crc32ChecksumA, crc32ChecksumB;
+	int ret;
+	bool valid_flaga, valid_flagb;
+	ret = uclass_get_device_by_name(UCLASS_SPI, node_name, &bus);
+	if(ret) {
+		return ret;
+	}
+	ret = spi_find_chip_select(bus, 0, &dev);
+	if(ret) {
+		printf("Invalid chip select :%d (err=%d)\n", 0, ret);
+		return ret;
+	}
+
+	if (!device_active(dev)) {
+		if(device_probe(dev))
+			return -1;
+	}
+	flash = dev_get_uclass_priv(dev);
+	if(!flash) {
+		printf("SPI dev_get_uclass_priv failed\n");
+		return -1;
+	}
+
+	size = sizeof(som_info_t);
+	memset((uint8_t *)&gSom_Board_InfoA, 0, size);
+	memset((uint8_t *)&gSom_Board_InfoB, 0, size);
+	printf("Get som info from flash\n");
+	ret = spi_flash_read(flash, SOM_BOARD_INFO_FLASH_MAIN_OFFSET, size, (void *)&gSom_Board_InfoA);
+	if(ret) {
+		return ret;
+	}
+	ret = spi_flash_read(flash, SOM_BOARD_INFO_FLASH_BACKUP_OFFSET, size, (void *)&gSom_Board_InfoB);
+	if(ret) {
+		return ret;
+	}
+	crc32ChecksumA = crc32(0xffffffff,  (uint8_t *)&gSom_Board_InfoA, sizeof(som_info_t)-4);
+	crc32ChecksumB = crc32(0xffffffff,  (uint8_t *)&gSom_Board_InfoB, sizeof(som_info_t)-4);
+	valid_flaga = (gSom_Board_InfoA.magic == MAGIC_NUMBER) && (gSom_Board_InfoA.crc == crc32ChecksumA);
+	valid_flagb = (gSom_Board_InfoB.magic == MAGIC_NUMBER) && (gSom_Board_InfoB.crc == crc32ChecksumB);
+	if (valid_flaga && !valid_flagb) {
+		update_som_info(flash, SOM_BOARD_INFO_FLASH_BACKUP_OFFSET, size, &gSom_Board_InfoA);
+	} else if (!valid_flaga && valid_flagb) {
+		update_som_info(flash, SOM_BOARD_INFO_FLASH_MAIN_OFFSET, size, &gSom_Board_InfoB);
+	} else if (!valid_flaga && !valid_flagb) {
+		printf("ERROR: No valid SOM Board info\r\n");
+	}
+
+	return 0;
+}
 
 static int get_carrier_board_info(void)
 {
@@ -96,12 +191,12 @@ static int get_carrier_board_info(void)
 	}
 	crc32Checksum = crc32(0xffffffff, (uint8_t *)&gCarrier_Board_Info, sizeof(CarrierBoardInfo)-4);
 
-	if(gCarrier_Board_Info.magicNumber != MAGIC_NUMBER) {
+	if((gCarrier_Board_Info.magicNumber != MAGIC_NUMBER) || (gCarrier_Board_Info.crc32Checksum != crc32Checksum)) {
 		memset((uint8_t *)&gCarrier_Board_Info, 0, sizeof(CarrierBoardInfo));
 		ret = dm_i2c_read(dev, CARRIER_BOARD_INFO_EEPROM_BACKUP_OFFSET, (uint8_t *)&gCarrier_Board_Info, sizeof(CarrierBoardInfo));
 		crc32Checksum = crc32(0xffffffff, (uint8_t *)&gCarrier_Board_Info, sizeof(CarrierBoardInfo)-4);
 	}
-	if(gCarrier_Board_Info.magicNumber == MAGIC_NUMBER) {
+	if((gCarrier_Board_Info.magicNumber == MAGIC_NUMBER) && (gCarrier_Board_Info.crc32Checksum == crc32Checksum)) {
 		if (!eth_env_get_enetaddr("ethaddr", mac1_addr) && is_valid_ethaddr(gCarrier_Board_Info.ethernetMAC1)) {
 			eth_env_set_enetaddr("ethaddr", gCarrier_Board_Info.ethernetMAC1);
 		}
@@ -112,6 +207,8 @@ static int get_carrier_board_info(void)
 			memcpy(boardSerialNumber, gCarrier_Board_Info.boardSerialNumber, sizeof(gCarrier_Board_Info.boardSerialNumber));
 			env_set("board_info", boardSerialNumber);
 		}
+	} else {
+		printf("ERROR: No valid Carrier Board info\r\n");
 	}
 
 	return 0;
@@ -130,7 +227,8 @@ int misc_init_r(void)
 #endif
 
 	get_carrier_board_info();
-
+	const char *node_name_d0 = "spi@51800000";
+	get_som_info(node_name_d0);
 	uclass_get_device_by_name(UCLASS_VIDEO, "display-subsystem", &dev);
 
 	env_set_ulong("ram_size", (gd->ram_size / 1024 / 1024 / 1024));

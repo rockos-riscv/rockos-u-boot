@@ -305,7 +305,7 @@ U_BOOT_CMD(
 	"    rifname dev_part : block device and partition\n"
 	"    filename : filesystem image file (e.g. xxx.wic)\n"
 	"    wifname dev_num : set write image file block device(sata, mmc)\n"
-	"        You can see the devece num for the emmc or sd card in the cmd \"mmc list\"(e.g. 0, 1)\n"
+	"        You can see the device num for the emmc or sd card in the cmd \"mmc list\"(e.g. 0, 1)\n"
 	"    e.g. : es_fs write usb 0 image.wic sata 0\n"
 	"es_fs update ifname  dev_part filename wifname wdev_part\n"
 	"  - Write File system image file from {ifname} {dev_part} to mmc {dev_part_num}\n"
