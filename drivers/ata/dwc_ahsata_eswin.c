@@ -472,7 +472,7 @@ static int ahci_port_start(struct ahci_uc_priv *uc_priv, u8 port)
 	struct ahci_ioports *pp = &uc_priv->port[port];
 	struct sata_port_regs *port_mmio = pp->port_mmio;
 	u32 port_status;
-	u32 mem;
+	u64 mem;
 	int timeout = 10000000;
 
 	debug("Enter start port: %d\n", port);
@@ -483,7 +483,7 @@ static int ahci_port_start(struct ahci_uc_priv *uc_priv, u8 port)
 		return -1;
 	}
 
-	mem = (u32)malloc(AHCI_PORT_PRIV_DMA_SZ + 1024);
+	mem = (u64)malloc(AHCI_PORT_PRIV_DMA_SZ + 1024);
 	if (!mem) {
 		printf("No mem for table!\n");
 		return -ENOMEM;
@@ -497,13 +497,13 @@ static int ahci_port_start(struct ahci_uc_priv *uc_priv, u8 port)
 	 * 32 bytes each in size
 	 */
 	pp->cmd_slot = (struct ahci_cmd_hdr *)mem;
-	debug("cmd_slot = 0x%x\n", (unsigned int) pp->cmd_slot);
+	debug("cmd_slot = 0x%llx\n", (u64) pp->cmd_slot);
 	mem += (AHCI_CMD_SLOT_SZ * DWC_AHSATA_MAX_CMD_SLOTS);
 
 	/*
 	 * Second item: Received-FIS area, 256-Byte aligned
 	 */
-	pp->rx_fis = mem;
+	pp->rx_fis = (u32)mem;
 	mem += AHCI_RX_FIS_SZ;
 
 	/*
@@ -517,7 +517,7 @@ static int ahci_port_start(struct ahci_uc_priv *uc_priv, u8 port)
 
 	writel_with_flush(0x00004444, &port_mmio->dmacr);
 	pp->cmd_tbl_sg = (struct ahci_sg *)mem;
-	writel_with_flush((u32)pp->cmd_slot, &port_mmio->clb);
+	writel_with_flush((u64)pp->cmd_slot, &port_mmio->clb);
 	writel_with_flush(pp->rx_fis, &port_mmio->fb);
 
 	/* Enable FRE */
@@ -784,7 +784,6 @@ static int dwc_ahsata_scan_common(struct ahci_uc_priv *uc_priv,
 	u8 serial[ATA_ID_SERNO_LEN + 1] = { 0 };
 	u8 firmware[ATA_ID_FW_REV_LEN + 1] = { 0 };
 	u8 product[ATA_ID_PROD_LEN + 1] = { 0 };
-	u8 port = uc_priv->hard_port_no;
 	ALLOC_CACHE_ALIGN_BUFFER(u16, id, ATA_ID_WORDS);
 
 	/* Identify device to get information */
