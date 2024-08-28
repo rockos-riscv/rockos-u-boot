@@ -50,26 +50,6 @@ typedef struct __OPT_DATA_ST {
 	uint8_t val[0];                /* reg vale hex */
 } OTP_DATA_T;
 
-static int eswin_otp_program_bit(int bit_addr)
-{
-	int byte_addr;
-	unsigned int mask;
-	int ret;
-	uint8_t data = 1;
-
-	byte_addr = bit_addr / 8;
-	mask = 1 << (bit_addr % 8);
-	data = data << (bit_addr % 8);
-
-	ret = otp_write_data(byte_addr, (unsigned char)data, mask);
-	if (ERR_OK != ret) {
-		printf("faild to write otp bit, bit_addr 0x%x, byte_addr 0x%x, mask 0x%x, data %d, ret %d\n",
-			bit_addr, byte_addr, mask, data, ret);
-		return ret;
-	}
-	return 0;
-}
-
 static int eswin_otp_read_bit(int bit_addr, uint8_t *bit_data)
 {
 	int byte_addr;
@@ -162,6 +142,28 @@ static int do_eswin_otp_read_field(struct cmd_tbl *cmdtp, int flag, int argc, ch
 	return CMD_RET_SUCCESS;
 }
 
+#ifdef ESWIN_OTP_WRITE
+static int eswin_otp_program_bit(int bit_addr)
+{
+	int byte_addr;
+	unsigned int mask;
+	int ret;
+	uint8_t data = 1;
+
+	byte_addr = bit_addr / 8;
+	mask = 1 << (bit_addr % 8);
+	data = data << (bit_addr % 8);
+
+	ret = otp_write_data(byte_addr, (unsigned char)data, mask);
+	if (ERR_OK != ret) {
+		printf("faild to write otp bit, bit_addr 0x%x, byte_addr 0x%x, mask 0x%x, data %d, ret %d\n",
+			bit_addr, byte_addr, mask, data, ret);
+		return ret;
+	}
+	return 0;
+}
+
+
 static int do_eswin_otp_program_bit(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
 {
 	int ret;
@@ -183,6 +185,7 @@ static int do_eswin_otp_program_bit(struct cmd_tbl *cmdtp, int flag, int argc, c
 
 	return CMD_RET_SUCCESS;
 }
+#endif
 
 static int do_eswin_otp_read_bit(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
 {
@@ -209,7 +212,9 @@ static int do_eswin_otp_read_bit(struct cmd_tbl *cmdtp, int flag, int argc, char
 
 static struct cmd_tbl cmd_eswin_otp[] = {
 	U_BOOT_CMD_MKENT(read_field, 2, 0, do_eswin_otp_read_field, "", ""),
-	//U_BOOT_CMD_MKENT(program_bit, 2, 0, do_eswin_otp_program_bit, "", ""),
+#ifdef ESWIN_OTP_WRITE
+	U_BOOT_CMD_MKENT(program_bit, 2, 0, do_eswin_otp_program_bit, "", ""),
+#endif
 	U_BOOT_CMD_MKENT(read_bit, 2, 0, do_eswin_otp_read_bit, "", ""),
 };
 
