@@ -124,6 +124,8 @@ typedef enum {
     SPIC_CMD_TYPE_READ_JEDEC_ID
 } SPI_FLASH_COMMAND_TYPE_T;
 
+#undef SPINOR_OP_RDSR2
+#undef SPINOR_OP_WRSR2
 /* Flash opcodes. */
 #define SPINOR_OP_WREN		0x06	/* Write enable */
 #define SPINOR_OP_WRDIS		0x04	/* Write disable */
@@ -573,7 +575,7 @@ void es_writer(struct es_spi_priv *priv)
 	offset = priv->addr;
 	cmd_code = priv->opcode;
 	u32 cmd_type = priv->cmd_type;
-	u8 *wr_dest = priv->tx;
+	u8 *wr_dest = (u8 *)(priv->tx);
 	int size = priv->len;
 	if (size == 0)
 	{
