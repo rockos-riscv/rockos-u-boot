@@ -173,13 +173,13 @@ int get_bootbank_from_disk(struct blk_desc *dev_desc,
 
 int set_bootable_devplist(void)
 {
+#if (defined CONFIG_SYSTEM_UPDATE_B) || (defined CONFIG_SYSTEM_UPDATE_C)
     struct blk_desc *dev_desc;
     struct disk_partition part_info;
     struct bootloader_message *abc = NULL;
     const char *dev_part_str;
     const char *other_dev_part_str;
 
-#if (defined CONFIG_SYSTEM_UPDATE_B) || (defined CONFIG_SYSTEM_UPDATE_C)
     if (part_get_info_by_dev_and_name_or_num(MMC_DEV_IFACE, MISC_DEV_PART,
                 &dev_desc, &part_info, true) < 0) {
         printf("part_get_info_by_dev_and_name_or_num failed!\n");

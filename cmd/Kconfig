@@ -1250,15 +1250,28 @@ config CMD_LOADS
 config CMD_ESWUPDATE
 	bool "eswupdate"
 	default n
+	select CMD_ES_MKFSFAT
 	help
 	  Performs the Bootloader update boot flow
 
 config CMD_ESFS
-	bool "ESWIN filesystem command"
+	bool "es_fs"
 	default n
 	help
 	  Enables ESWIN filesystem commands (e.g. write, update) that work for multiple
 	  fs types.
+
+config CMD_ESBURN
+	bool "es_burn"
+	default n
+	help
+	  Enables ESWIN es_burn cmd to write boot/root filesystem file to mmc.
+
+config CMD_ES_MKFSFAT
+	bool "mkfsfat"
+	select FS_FAT
+	help
+	  Support for creates a DOS FAT filesystem on a device
 
 config CMD_ESWOTP
 	bool "eswotp"

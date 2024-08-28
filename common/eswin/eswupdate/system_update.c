@@ -41,10 +41,8 @@ static char dev_part[DEV_STR_LEN];
 
 static struct blk_desc *mmc_dev_desc;
 static struct disk_partition misc_part_info;
-static struct disk_partition dev_part_info;
 static struct bootloader_message *abc = NULL;
 static struct boot_bank *bank = NULL;
-static char eswversion[STR_LENGTH];
 static char eswaddress[STR_LENGTH];
 static char eswstatus[STR_LENGTH];
 static int fs_initialize(int mode, char *dev_iface, char *dev_part)
@@ -101,7 +99,6 @@ static int check_signature_value(int mode, int index)
     loff_t len_boot;
     struct firmware_entry_header_t *feht;
     int ret = 0;
-    int i;
     struct udevice *dev;
     uint64_t offset, size;
     uint8_t sign_type, key_index;
@@ -217,11 +214,6 @@ static int compare_version(uint32_t a, uint32_t b)
     return a>b?1:(a==b)?0:-1;
 }
 
-static unsigned long long int ntohl64(unsigned long long int netlong)
-{
-    return (((uint64_t)__bswap32(netlong) << 32) | __bswap32((uint64_t)(netlong)>>32));
-}
-
 /* Check the header of the update file.
  *
  * if verify correct, return 0;
@@ -231,11 +223,9 @@ static unsigned long long int ntohl64(unsigned long long int netlong)
 static void *sign_destaddr = NULL;
 static int check_header_valid(uint64_t size, uint8_t sign_type, uint8_t key_index, uint32_t version)
 {
-    int srvc_type = 3;    /* SRVC_TYPE_RSA_CRYPT_DECRYPT 0x03 */
-    int i, ret;
+    int ret;
     struct udevice *dev;
     struct signature_content *sc = NULL;
-    struct firmware_entry_header_t *feht;
     REQ_SRVC_T srvcReq;
     u32* signAddr;
     u32* imageAddr;
@@ -344,9 +334,6 @@ static uint32_t load_signature_and_payload(int mode, int index)
     uint32_t version;
     uint8_t sign_type, key_index;
     struct firmware_entry_header_t *feht;
-    struct signature_content *sc = NULL;
-    const char *dev_part_str;
-    int i;
 
     fs_initialize(mode, dev_iface, dev_part);
     /* read struct of firmware_entry_header_t */
@@ -389,7 +376,6 @@ static int emmc_write_kernel(uint32_t version, uint64_t offset, uint64_t size)
     int curr_bank = 0;
     int block = 1;
     loff_t len;
-    loff_t len_boot;
     unsigned long time;
     const char *filename;
     const char *dev_part_str;

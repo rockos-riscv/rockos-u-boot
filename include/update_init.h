@@ -122,13 +122,6 @@ enum update_mode {
 };
 
 int ota_update_init(void);
-void ota_update_exit(void);
-
-int mmc_update_init(void);
-void mmc_update_exit(void);
-
-int usb_update_init(void);
-void usb_update_exit(void);
 
 int draw_background(void);
 
