@@ -1020,6 +1020,10 @@ static int do_boot_write(int argc, char *const argv[])
 	for(int i = 0;i < cycle_index; i++) {
 		currentIndex = i / 2;
 		ret = blk_dwrite(mmc_dev_desc, rootfs_part_info.start + i * package_blk, package_blk, (void __iomem *)(addr + i * package_blk * rootfs_part_info.blksz));
+		if(ret != package_blk) {
+			printf("Error: rootfs write failed!\n");
+			return -ENXIO;
+		}
 		printf("Write progress: %3d%%:", i);
 		for(int col = 0; col < currentIndex; col++) {
 			printf("%s","+");
@@ -1029,6 +1033,10 @@ static int do_boot_write(int argc, char *const argv[])
 	if(last_blk)
 	{
 		ret = blk_dwrite(mmc_dev_desc, rootfs_part_info.start + cycle_index * package_blk, last_blk, (void __iomem *)(addr + cycle_index * package_blk * rootfs_part_info.blksz));
+		if(ret != last_blk) {
+			printf("Error: rootfs write failed!\n");
+			return -ENXIO;
+		}
 
 	}
 	printf("Write progress: %3d%%:", 100);
@@ -1092,6 +1100,11 @@ static int do_root_write(int argc, char *const argv[])
 	for(int i = 0;i < cycle_index; i++) {
 		currentIndex = i / 2;
 		ret = blk_dwrite(mmc_dev_desc, rootfs_part_info.start + i * package_blk, package_blk, (void __iomem *)(addr + i * package_blk * rootfs_part_info.blksz));
+		if(ret != package_blk) {
+			printf("Error: rootfs write failed!\n");
+			return -ENXIO;
+		}
+
 		printf("Write progress: %3d%%:", i);
 		for(int col = 0; col < currentIndex; col++) {
 			printf("%s","+");
@@ -1101,6 +1114,10 @@ static int do_root_write(int argc, char *const argv[])
 	if(last_blk)
 	{
 		ret = blk_dwrite(mmc_dev_desc, rootfs_part_info.start + cycle_index * package_blk, last_blk, (void __iomem *)(addr + cycle_index * package_blk * rootfs_part_info.blksz));
+		if(ret != last_blk) {
+			printf("Error: rootfs write failed!\n");
+			return -ENXIO;
+		}
 	}
 	printf("Write progress: %3d%%:", 100);
 	for(int j = 0; j < 100/2; j ++)
