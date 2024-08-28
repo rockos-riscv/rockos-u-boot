@@ -33,7 +33,7 @@
 #include <linux/math64.h>
 
 #define FW_FILE_IMG   "/lib/firmware/eic7x/lpcpu_fw.bin"
-#define BOOT_FILE_IMG   "/lib/firmware/eic7x/lpcpu_boot.bin"
+#define LPCPU_BOOT_FILE_IMG   "/lib/firmware/eic7x/lpcpu_boot.bin"
 #define LPCPU_FW_LOAD_ADDR  0xDFFF0000
 /*
  * Cause emmc dma cannot access address 0x58800000, so load fw to ddr fist,
@@ -122,60 +122,6 @@ extern int ChkResData(IPC_RES_T *pIpcResData, u8 *pRecBuf, int len0);
 
 extern int ChkReqData(IPC_REQ_T *pIpcReqData, u8 *pRecBuf, int len0);
 
-
-static int eswin_umbox_rx_callback(struct mbox_chan *chan, void *msg)
-{
-    struct eswin_umbox *umbox = dev_get_priv(chan->dev);
-    struct eswin_umbox_session *soc_session = umbox->umbox_session;
-
-#ifdef CONFIG_SIM
-    //eswin_local_msg_from_user    MsgFromUser;
-    MSG_SEND_T *hdr = (MSG_SEND_T *)msg;
-    MSG_RECV_T *hdr0 = (MSG_RECV_T *)msg;
-
-    REQ_DATA_DOMAIN_T ReqDataDomain;
-    if(soc_session->num != hdr->num)
-    {
-        printk("eswin_umbox_rx_callback: soc_session->num(%d)!=hdr->num(%d),error!\r\n",
-        soc_session->num,hdr->num );
-        return 1;
-    }
-    if(soc_session->curSerType!=hdr->srv_type)
-    {
-        printk("eswin_umbox_rx_callback: curSerType(%d)!=hdr->srv_type(%d),error!\r\n",
-        soc_session->curSerType,hdr->srv_type );
-        return 1;
-    }
-
-    memset(&ReqDataDomain,0,sizeof(ReqDataDomain));
-    printk("eswin_umbox_rx_callback: recv num=%d,serv_type=%d,size=%d.\r\n",
-    hdr->num, hdr->srv_type, hdr->size);
-    DecodeReqData(hdr->srv_type,hdr->pData,hdr->size,&ReqDataDomain);
-    //DbgPrintSerDataU84(hdr->srv_type,&ReqDataDomain);
-
-#else
-    // MSG_RECV_T *hdr = (MSG_RECV_T*) msg;
-
-    // if (soc_session->num != hdr->num)
-    // {
-    //     printk("eswin_umbox_rx_callback: soc_session->num(%d)!=hdr->num(%d),error!\r\n", soc_session->num, hdr->num);
-    //     return 1;
-    // }
-    // if (soc_session->curSerType != hdr->dwServiceID)
-    // {
-    //     printk("eswin_umbox_rx_callback: curSerType(%d)!=hdr->dwServiceID(%d),error!\r\n", soc_session->curSerType, hdr->dwServiceID);
-    //     return 1;
-    // }
-
-    // debug("eswin_umbox_rx_callback: recv num=%u,ServiceID=%u,IpcStatus=%u,ServiceStatus=%u,size=%u.\r\n", hdr->num, hdr->dwServiceID, hdr->IpcStatus, hdr->ServiceStatus, hdr->size);
-
-    DbgPrintSerDataE21(msg);
-
-    debug("eswin_umbox_rx_callback: end.\n");
-#endif
-
-    return 0;
-}
 // TODO timeout ......
 #define MAX_REPEAT_TIMES 100000
 static int eswin_umbox_recv(struct mbox_chan *chan, void *data)
@@ -260,12 +206,10 @@ static int umbox_send_data(struct eswin_umbox *umbox, void *msg)
 static int eswin_umbox_send(struct mbox_chan *chan, const void *data)
 {
     struct eswin_umbox *umbox = dev_get_priv(chan->dev);
-    int max_send_size, max_recv_size, ret = 0;
+    int ret = 0;
     u8 regData0[8];
     u8 regData1[8];
     REGISTER_DATA_T rData;
-    IPC_REQ_T IpcReqData;
-    MSG_SEND_T *pSendMsg;
 
     if (IsChanBusy(umbox, chan)) {
         printk("win2030_umbox_send: IsChanBusy return true, failed.\r\n");
@@ -358,59 +302,6 @@ static void eswin_lpcpu_rst_ctrl(unsigned int val)
     writel(val, (void __iomem*)(syscrg_csr_base + lpcpu_rst_ctrl));
 }
 
-static int eswin_lpcpu_boot_status(struct eswin_umbox *umbox)
-{
-    unsigned int state0, i;
-    u8 regData0[8];
-    u32 msg[MBOX_MSG_LEN];
-    int count;
-
-    u32 dwVal;
-    unsigned int state;
-
-    count = 0;
-    while (count < 500000) {
-        state = readl(umbox->rx_base + REG_MB_INT);
-        state0 = state;
-        if (state0 == E21_IRQ_BIT) {
-            break;
-        }
-        count++;
-    }
-
-    if (!state0) {
-        printk("win2030_umbox_recv read REG_MB_INT failed.\r\n");
-        return -1;
-    }
-    i = 0;
-    while (1) {
-        dwVal = readl(umbox->rx_base + REG_FIFO_STATUS);  // step-7
-        dwVal = (dwVal & 0x02);
-        if (0 != dwVal)
-            break;
-        msg[i] = readl(umbox->rx_base + REG_RD_DATA_0);      // step-8
-        msg[i + 1] = readl(umbox->rx_base + REG_RD_DATA_1);  // step-8
-        i += 2;
-        writel(0x00000000, umbox->rx_base + REG_RD_DATA_1);  // step-9
-    }
-    writel(0, umbox->rx_base + REG_MB_INT);
-    if (!dwVal) {
-        printk("win2030_umbox_recv read REG_MB_ERR failed.\r\n");
-        return -1;
-    }
-    /*Bootrom did not do mb operation before trigger mailbox irq,
-        So Here we make a delay to ensure the bootrom memory operation is finished.
-    */
-    mdelay(5);
-    if(msg[0] != FW_LOAD_SUCC)
-    {
-        printk("Lpcpu boot failed\r\n");
-        return -1;
-    }
-
-    return 0;
-}
-
 static int eswin_umbox_probe(struct udevice *dev)
 {
     // printf("Lpcpu driver probe...\n");
@@ -418,12 +309,11 @@ static int eswin_umbox_probe(struct udevice *dev)
     const struct device_node *node;
     fdt_addr_t tx_addr;
     fdt_addr_t rx_addr;
-    uint32_t msg;
     const char *dev_part_str;
     const char *filename;
     unsigned long time;
     unsigned long fw_addr;
-	unsigned long fw_ddr_addr;
+    unsigned long fw_ddr_addr;
     uint64_t len_read;
     int32_t ret = 0;
 
@@ -443,31 +333,33 @@ static int eswin_umbox_probe(struct udevice *dev)
     debug("umbox->rx_base=0x%p, from dts.\r\n", umbox->rx_base);
 
     // lpcpu firmware load
-    printf("start lpcpu boot\n");
-    dev_part_str = UPDATE_ROOT_DEV_PART;
-
-	if (fs_set_blk_dev(MMC_DEV_IFACE, dev_part_str, FS_TYPE_EXT)) {
-		log_err("Can't set block device for lpcpu\n");
-		return -1;
-	}
-
-    filename = BOOT_FILE_IMG;
+    filename = LPCPU_BOOT_FILE_IMG;
     fw_addr = LPCPU_FW_LOAD_ADDR;
+
+    dev_part_str = UPDATE_ROOT_DEV_PART;
+    if(!file_exists(MMC_DEV_IFACE, dev_part_str, filename, FS_TYPE_EXT)) {
+        log_err("Low power features will not be supported!\n");
+        return -1;
+    }
+
+    if (fs_set_blk_dev(MMC_DEV_IFACE, dev_part_str, FS_TYPE_EXT)) {
+        return -1;
+    }
+
     time = get_timer(0);
-	ret = fs_read(filename, fw_addr, 0, 0, &len_read);
-	time = get_timer(time);
-	if (ret < 0) {
-		log_err("Failed to load '%s'\n", filename);
-		return -1;
-	}
+    ret = fs_read(filename, fw_addr, 0, 0, &len_read);
+    time = get_timer(time);
+    if (ret < 0) {
+        return -1;
+    }
 
     // printf("Lpcpu boot file read in %lu ms", time);
-	// if (time > 0) {
-	// 	puts(" (");
-	// 	print_size(div_u64(len_read, time) * 1000, "/s");
-	// 	puts(")");
-	// }
-	// puts("\n");
+    // if (time > 0) {
+    // 	puts(" (");
+    // 	print_size(div_u64(len_read, time) * 1000, "/s");
+    // 	puts(")");
+    // }
+    // puts("\n");
 
     // lpcpu bringup from ddr
     flush_cache(LPCPU_FW_LOAD_ADDR, len_read);
@@ -480,7 +372,6 @@ static int eswin_umbox_probe(struct udevice *dev)
     mdelay(5);
 
 	if (fs_set_blk_dev(MMC_DEV_IFACE, dev_part_str, FS_TYPE_EXT)) {
-		log_err("Can't set block device for lpcpu\n");
 		return -1;
 	}
     filename = FW_FILE_IMG;
@@ -489,7 +380,6 @@ static int eswin_umbox_probe(struct udevice *dev)
 	ret = fs_read(filename, fw_ddr_addr, 0, 0, &len_read);
 	time = get_timer(time);
 	if (ret < 0) {
-		log_err("Failed to load '%s'\n", filename);
 		return -1;
 	}
 	fw_addr = LPCPU_BOOT_FW_LOAD_ADDR;
