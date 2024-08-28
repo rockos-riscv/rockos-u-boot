@@ -25,7 +25,7 @@ int dram_init(void)
 {
 	int ret = fdtdec_setup_mem_size_base();
 	unsigned long base_with_offset = (gd->ram_base + RAM_BASE_OFFSET);
-	gd->ram_size = get_ram_size(base_with_offset, DDR_SIZE_MAX);
+	gd->ram_size = get_ram_size((long *)base_with_offset, DDR_SIZE_MAX);
 	return ret;
 }
 
