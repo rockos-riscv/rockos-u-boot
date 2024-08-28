@@ -45,7 +45,6 @@ static int do_mailbox_test(struct cmd_tbl *cmdtp, int flag, int argc,
 			  char *const argv[])
 {
 	struct udevice *dev;
-	uint32_t msg;
 
 	printk("/*****====================uboot: start test lpcpu mailbox =================================*****/\r\n");
 
