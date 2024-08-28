@@ -504,12 +504,12 @@ static int do_mmc_rescan(struct cmd_tbl *cmdtp, int flag,
 	struct mmc *mmc;
 
 	if (argc == 1) {
-		mmc = init_mmc_device(curr_device, true);
+		mmc = init_mmc_device(curr_device, false);
 	} else if (argc == 2) {
 		enum bus_mode speed_mode;
 
 		speed_mode = (int)dectoul(argv[1], NULL);
-		mmc = __init_mmc_device(curr_device, true, speed_mode);
+		mmc = __init_mmc_device(curr_device, false, speed_mode);
 	} else {
 		return CMD_RET_USAGE;
 	}

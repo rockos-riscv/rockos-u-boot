@@ -226,11 +226,24 @@ static void eswin_sdhci_set_uhs_timing(struct sdhci_host *host)
 	sdhci_writew(host, reg, SDHCI_HOST_CONTROL2);
 }
 
+void sdhci_do_enable_v4_mode(struct sdhci_host *host)
+{
+	u16 ctrl2;
+
+	ctrl2 = sdhci_readw(host, SDHCI_HOST_CONTROL2);
+	if (ctrl2 & SDHCI_CTRL_V4_MODE)
+		return;
+
+	ctrl2 |= SDHCI_CTRL_V4_MODE;
+	sdhci_writew(host, ctrl2, SDHCI_HOST_CONTROL2);
+}
 
 static void eswin_emmc_set_control_reg(struct sdhci_host *host)
 {
 	struct mmc *mmc = (struct mmc *)host->mmc;
 	u32 reg;
+
+	sdhci_do_enable_v4_mode(host);
 
 	if (mmc->signal_voltage == MMC_SIGNAL_VOLTAGE_180) {
 		reg = sdhci_readw(host, SDHCI_HOST_CONTROL2);
@@ -651,6 +664,8 @@ static int eswin_sdhci_probe(struct udevice *dev)
 		return ret;
 
 	host->ops = &eswin_emmc_ops;
+	sdhci_do_enable_v4_mode(host);
+
 	ret = sdhci_probe(dev);
 
 	return ret;

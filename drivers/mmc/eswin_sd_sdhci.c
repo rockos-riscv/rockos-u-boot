@@ -41,6 +41,7 @@ extern void eswin_enable_card_clk(struct sdhci_host *host);
 extern void eswin_sdhci_set_clock(struct sdhci_host *host, unsigned int div_in);
 extern unsigned int eswin_convert_drive_impedance_ohm(struct udevice *dev, unsigned int dr_ohm);
 extern int eswin_sdhci_execute_tuning(struct mmc *mmc, u8 opcode);
+void sdhci_do_enable_v4_mode(struct sdhci_host *host);
 
 struct eswin_sd_plat {
 	struct mmc_config cfg;
@@ -108,6 +109,8 @@ static void eswin_sd_set_control_reg(struct sdhci_host *host)
 	struct mmc *mmc = (struct mmc *)host->mmc;
 
 	if (!IS_SD(host->mmc)) return;
+
+	sdhci_do_enable_v4_mode(host);
 
 	eswin_sdhci_set_voltage(host);
 
