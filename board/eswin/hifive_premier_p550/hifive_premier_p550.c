@@ -36,6 +36,7 @@
 #include <spi_flash.h>
 #include <init.h>
 #include <dm/device-internal.h>
+#include <asm/gpio.h>
 #ifdef CONFIG_ESWIN_UMBOX
 #include <eswin/eswin-umbox-srvc.h>
 #endif
@@ -214,9 +215,40 @@ static int get_carrier_board_info(void)
 	return 0;
 }
 
+
+int set_voltage_default(void)
+{
+	ofnode node;
+	struct udevice *pinctrl;
+	struct gpio_desc desc;
+	int ret = 0;
+	node = ofnode_path("/config");
+	if (!ofnode_valid(node)) {
+		pr_err("Can't find /config node!\n");
+		return -EINVAL;
+	}
+	if(uclass_get_device(UCLASS_PINCTRL, 0, &pinctrl)) {
+		debug("%s: Cannot find pinctrl device\n", __func__);
+		return -EINVAL;
+	}
+	if(pinctrl_select_state(pinctrl, "default")) {
+		printf("Failed to set pinctrl state: %d\n", pinctrl_select_state(pinctrl, "default"));
+		return -EINVAL;
+	}
+	if(gpio_request_by_name_nodev(node, "power-gpios", 0, &desc,
+				   GPIOD_IS_OUT | GPIOD_IS_OUT_ACTIVE)) {
+		pr_err("Can't request  \"power-gpios\" !\n");
+		return -EINVAL;
+	}
+	dm_gpio_set_value(&desc, 0);
+	return 0;
+}
+
 int misc_init_r(void)
 {
 	struct udevice *dev;
+
+	set_voltage_default();
 
 #ifdef CONFIG_ESWIN_PMP
 	eswin_pmp_init();
