@@ -531,7 +531,7 @@ static void vidconsole_putc(struct stdio_dev *sdev, const char ch)
 		console_puts_select_stderr(true, "[vc err: putc]");
 #endif
 	}
-#ifdef CONFIG_EIC7700_RISCV
+#ifdef CONFIG_EIC770X_RISCV
 	// Don't do cache flush when output single charactor
 	// unless backspace or newline which invoke video_sync()
 	// in their own function.

@@ -344,7 +344,7 @@ config PINCTRL_ZYNQMP
 
 config PINCTRL_EIC7700
 	bool "Eswin EIC7700 pin control driver"
-	depends on DM && PINCTRL_GENERIC && EIC7700_RISCV
+	depends on DM && PINCTRL_GENERIC && EIC770X_RISCV
 	default y
 	help
 	  Support pin multiplexing control on Eswin EIC7700. The driver uses

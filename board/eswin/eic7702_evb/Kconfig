@@ -1,15 +1,15 @@
-if TARGET_HIFIVE_PREMIER_P550
+if TARGET_ESWIN_EVB_EIC7702
 config SYS_BOARD
-	default "hifive_premier_p550"
-
-config SYS_CONFIG_NAME
-	default "hifive_premier_p550"
+	default "eic7702_evb"
 
 config SYS_VENDOR
 	default "eswin"
 
 config SYS_CPU
 	default "eic770x"
+
+config SYS_CONFIG_NAME
+	default "eswin_eic7702_evb"
 
 config TEXT_BASE
 	default 0x80200000 if SPL

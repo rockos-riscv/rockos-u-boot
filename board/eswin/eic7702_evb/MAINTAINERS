@@ -1,0 +1,6 @@
+ESWIN EIC7702 EVB BOARD
+M:  Xiang Xu <xuxiang@eswincomputing.com>
+S:  Maintained
+F:  board/eswin/eic7702/
+F:  include/configs/eswin_eic7702_evb.h
+F:  configs/eic7702_uboot_defconfig

@@ -6,7 +6,7 @@ config SYS_VENDOR
 	default "eswin"
 
 config SYS_CPU
-	default "eic7700"
+	default "eic770x"
 
 config SYS_CONFIG_NAME
 	default "eswin_eic7700_evb"
@@ -24,7 +24,7 @@ config SPL_OPENSBI_LOAD_ADDR
 
 config BOARD_SPECIFIC_OPTIONS # dummy
 	def_bool y
-	select EIC7700_RISCV
+	select EIC770X_RISCV
 	select BOARD_LATE_INIT
 	imply CMD_DHCP
 	imply CMD_EXT2
