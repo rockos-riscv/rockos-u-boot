@@ -1372,6 +1372,15 @@ int fdtdec_add_reserved_memory(void *blob, const char *basename,
 				*phandlep = fdt_get_phandle(blob, node);
 			return 0;
 		}
+		#if defined(CONFIG_EIC770X_RISCV)
+		/* find the same node mmz patition name, delete it,
+		 * the new node will be created at the next step
+		 */
+		if (0 == strcmp(basename, name)) {
+			fdt_del_node(blob, node);
+			debug("find the same node %s, delete the old node\n", name);
+		}
+		#endif
 	}
 
 	/*

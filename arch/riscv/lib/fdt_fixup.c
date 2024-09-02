@@ -73,8 +73,16 @@ int riscv_fdt_copy_resv_mem_node(const void *src, void *dst)
 		}
 		pmp_mem.start = addr;
 		pmp_mem.end = addr + size - 1;
-		err = fdtdec_add_reserved_memory(dst, basename, &pmp_mem,
-						 NULL, 0, &phandle, 0);
+		#if defined(CONFIG_EIC770X_RISCV)
+		const char *compat;
+		compat = fdt_getprop(src, node, "compatible", NULL);
+		if (compat)
+			err = fdtdec_add_reserved_memory(dst, basename, &pmp_mem,
+							&compat, 1, &phandle, 0);
+		else
+		#endif
+			err = fdtdec_add_reserved_memory(dst, basename, &pmp_mem,
+							NULL, 0, &phandle, 0);
 		if (err < 0 && err != -FDT_ERR_EXISTS) {
 			log_err("failed to add reserved memory: %d\n", err);
 			return err;
@@ -161,6 +169,7 @@ int arch_fixup_fdt(void *blob)
 #endif
 
 	/* Copy the reserved-memory node to the DT used by OS */
+	printf("++++++linmin, arch_fixup_fdt\n");
 	err = riscv_fdt_copy_resv_mem_node(gd->fdt_blob, blob);
 	if (err < 0)
 		return err;

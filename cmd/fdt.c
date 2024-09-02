@@ -30,6 +30,9 @@ DECLARE_GLOBAL_DATA_PTR;
 static int fdt_parse_prop(char *const*newval, int count, char *data, int *len);
 static int fdt_print(const char *pathp, char *prop, int depth);
 static int is_printable_string(const void *data, int len);
+#if defined(CONFIG_EIC770X_RISCV)
+static int fdt_add_mmz(void *fdt, char *partition, uint64_t addr, uint64_t size);
+#endif
 
 /*
  * The working_fdt points to our working flattened device tree.
@@ -780,6 +783,22 @@ static int do_fdt(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
 			extrasize = 0;
 		fdt_shrink_to_minimum(working_fdt, extrasize);
 	}
+	#if defined(CONFIG_EIC770X_RISCV)
+	/* fixup mmz of eic770x device tree */
+	else if (strncmp(argv[1], "mmz", 3) == 0) {
+		uint64_t addr, size;
+		int err;
+		addr = simple_strtoull(argv[3], NULL, 16);
+		size = simple_strtoull(argv[4], NULL, 16);
+		err = fdt_add_mmz(working_fdt, argv[2], addr, size);
+
+		if (err < 0) {
+			printf("libfdt fdt_add_mmz(): %s\n",
+				fdt_strerror(err));
+			return CMD_RET_FAILURE;
+		}
+	}
+	#endif
 	else {
 		/* Unrecognized command */
 		return CMD_RET_USAGE;
@@ -990,7 +1009,102 @@ static void print_data(const void *data, int len)
 }
 
 /****************************************************************************/
+#if defined(CONFIG_EIC770X_RISCV)
+static int fdt_add_mmz(void *fdt, char *partition, uint64_t addr, uint64_t size)
+{
+	int na = fdt_address_cells(fdt, 0);
+	int ns = fdt_size_cells(fdt, 0);
+	int err, parent, i, j;
+	int subnode;
+	fdt32_t addr_high, addr_low;
+	fdt32_t size_high, size_low;
+	fdt32_t reg[4];
+	fdt32_t *val;
+	char mmz_name[64];
 
+	addr_high = (uint64_t)addr >> 32;
+	addr_low = addr;
+	size_high = (uint64_t)size >> 32;
+	size_low = size;
+
+	/* try to locate the reserved memory node */
+	parent = fdt_path_offset(fdt, "/reserved-memory");
+	if (parent < 0) {
+		/* if such node does not exist, create one */
+		parent = fdt_add_subnode(fdt, 0, "reserved-memory");
+		if (parent < 0)
+			return parent;
+
+		/*
+		 * reserved-memory node has 3 required properties:
+		 * - #address-cells: the same value as the root node
+		 * - #size-cells: the same value as the root node
+		 * - ranges: should be empty
+		 */
+
+		err = fdt_setprop_empty(fdt, parent, "ranges");
+		if (err < 0)
+			return err;
+
+		err = fdt_setprop_u32(fdt, parent, "#size-cells", ns);
+		if (err < 0)
+			return err;
+
+		err = fdt_setprop_u32(fdt, parent, "#address-cells", na);
+		if (err < 0)
+			return err;
+	}
+
+	err = -1;
+	for (i = 0; i < 2; i++) {
+		for (j = 0; j < 2; j++) {
+			sprintf(mmz_name, "mmz_nid_%d_part_%d", i, j);
+			if (strcmp(mmz_name, partition) == 0) {
+				err = 0;
+				break;
+			}
+		}
+		if (err == 0)
+			break;
+	}
+
+	if (err !=0) {
+		printf("Invalid mmz partion name!!!\n");
+		return err;
+	}
+
+	subnode = fdt_add_subnode(fdt, parent, mmz_name);
+	if (subnode < 0)
+		return subnode;
+
+	err = fdt_setprop_empty(fdt, subnode, "no-map");
+	if (err < 0)
+		return err;
+
+	err = fdt_setprop(fdt, subnode, "compatible", "eswin-reserve-memory",
+			  strlen("eswin-reserve-memory") + 1);
+	if (err < 0)
+		return err;
+
+	/* encode the <reg> property value */
+	val = reg;
+	if (na > 1)
+		*val++ = cpu_to_fdt32(addr_high);
+	*val++ = cpu_to_fdt32(addr_low);
+	if (ns > 1)
+		*val++ = cpu_to_fdt32(size_high);
+	*val++ = cpu_to_fdt32(size_low);
+	err = fdt_setprop(fdt, subnode, "reg", reg,
+			  (na + ns) * sizeof(fdt32_t));
+	if (err < 0)
+		return err;
+
+	printf("Added %s to reserved-memory node, addr=0x%llx, size=0x%llx\n",
+		mmz_name, addr, size);
+
+	return 0;
+}
+#endif
 /*
  * Recursively print (a portion of) the working_fdt.  The depth parameter
  * determines how deeply nested the fdt is printed.
@@ -1150,6 +1264,9 @@ U_BOOT_LONGHELP(fdt,
 	"fdt checksign [<addr>]              - check FIT signature\n"
 	"                                      <addr> - address of key blob\n"
 	"                                               default gd->fdt_blob\n"
+#endif
+#if defined(CONFIG_EIC770X_RISCV)
+	"fdt mmz <name> <addr> <size>        - Create or resize a mmz partion in the reserved-memory\n"
 #endif
 	"NOTE: Dereference aliases by omitting the leading '/', "
 		"e.g. fdt print ethernet0.");
