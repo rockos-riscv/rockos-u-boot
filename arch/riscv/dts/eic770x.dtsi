@@ -506,10 +506,26 @@
 					<&cru EIC7X_CLK_VO_PIXEL_CLK>,
 					<&cru EIC7X_CLK_HSP_MSHC1_CORE_CLK>;
 		};
+		d1_cru: clock-controller@71828000 {
+			compatible = "eswin,eic770x-cru";
+			reg = <0x0 0x71828000 0x0 0x1000>;
+			#clock-cells = <1>;
+			#reset-cells = <1>;
+			clocks = <&d1_cru EIC7X_CLK_LSP_I2C0_PCLK>,
+					<&d1_cru EIC7X_CLK_VO_PIXEL_CLK>,
+					<&d1_cru EIC7X_CLK_HSP_MSHC1_CORE_CLK>;
+			status = "disabled";
+		};
 		rst: reset-controller@51828000 {
 			compatible = "eswin,eic770x-reset";
 			reg = <0x0 0x51828000 0x0 0x1000>;
 			#reset-cells = <2>;
+		};
+		d1_rst: reset-controller@71828000 {
+			compatible = "eswin,eic770x-reset";
+			reg = <0x0 0x71828000 0x0 0x1000>;
+			#reset-cells = <2>;
+			status = "disabled";
 		};
 		pcie: pcie@54000000 {
 			status = "disabled";
