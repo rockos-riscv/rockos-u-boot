@@ -28,6 +28,7 @@
 #include <mapmem.h>
 #include <sdhci.h>
 #include <clk.h>
+#include <reset.h>
 #include <linux/bitops.h>
 #include <linux/delay.h>
 #include <dm/device_compat.h>
@@ -41,23 +42,12 @@ extern void eswin_enable_card_clk(struct sdhci_host *host);
 extern void eswin_sdhci_set_clock(struct sdhci_host *host, unsigned int div_in);
 extern unsigned int eswin_convert_drive_impedance_ohm(struct udevice *dev, unsigned int dr_ohm);
 extern int eswin_sdhci_execute_tuning(struct mmc *mmc, u8 opcode);
-void sdhci_do_enable_v4_mode(struct sdhci_host *host);
+extern void sdhci_do_enable_v4_mode(struct sdhci_host *host);
+extern int eswin_sdhci_reset_init(struct udevice *dev, struct eswin_sdhci_data *eswin_sdhci);
 
 struct eswin_sd_plat {
 	struct mmc_config cfg;
 	struct mmc mmc;
-};
-
-struct eswin_sdhci_sdio_phy_data {
-	unsigned int drive_impedance;
-	unsigned int enable_data_pullup;
-	unsigned int enable_cmd_pullup;
-	unsigned int delay_code;
-};
-
-struct eswin_sdhci_sdio_data {
-	struct sdhci_host host;
-	struct eswin_sdhci_sdio_phy_data phy;
 };
 
 static void eswin_sdhci_set_voltage(struct sdhci_host *host)
@@ -133,8 +123,8 @@ static void eswin_sdhci_sdio_config_phy(struct sdhci_host *host)
 	unsigned int val = 0;
 	unsigned int drv = 0;
 	struct udevice *dev = host->mmc->dev;
-	struct eswin_sdhci_sdio_data *eswin_sdhci = dev_get_priv(dev);
-	struct eswin_sdhci_sdio_phy_data *phy = &eswin_sdhci->phy;
+		struct eswin_sdhci_data *eswin_sdhci = dev_get_priv(dev);
+	struct eswin_sdhci_phy_data *phy = &eswin_sdhci->phy;
 
 	drv = phy->drive_impedance << PHY_PAD_SP_DRIVE_SHIF;
 
@@ -184,7 +174,7 @@ static struct sdhci_ops eswin_sd_ops = {
 static void sdhci_sd_phy_poweron(struct sdhci_host *host)
 {
 	unsigned long  io_mem =  (unsigned long)host->ioaddr;
-	unsigned long hsp_io_mem = HSP_IO_MEM;
+	unsigned long hsp_io_mem = HOST_DIE_OFFSET(host) + HSP_IO_MEM;
 	int ret = 0;
 
 	/*CONFIGURE IN HSPTOP, VOLTAGE*/
@@ -225,7 +215,7 @@ void sdhci_sd_pre_init(struct sdhci_host *host)
 	volatile u32 *addr;
 
 	/*sw rst*/
-	addr = (u32 *)(ESWIN_HSPDMA_RST_CTRL);
+	addr = (u32 *)(HOST_DIE_OFFSET(host) + ESWIN_HSPDMA_RST_CTRL);
 	reg_val = *addr;
 	reg_val |= ESWIN_HSPDMA_SD_RST;
 	*addr = reg_val;
@@ -233,11 +223,79 @@ void sdhci_sd_pre_init(struct sdhci_host *host)
 	sdhci_sd_phy_poweron(host);
 }
 
+static int eswin_sd_clk_reset_init(struct udevice *dev)
+{
+	int ret = 0;
+	struct clk *clk_spll2_fout3;
+	struct clk *clk_mux;
+	struct eswin_sdhci_data *eswin_sdhci = dev_get_priv(dev);
+
+	eswin_sdhci->aclk = devm_clk_get(dev, "aclk");
+	if (IS_ERR(eswin_sdhci->aclk)) {
+		dev_err(dev, "aclk clock not found.\n");
+		return PTR_ERR(eswin_sdhci->aclk);
+	}
+
+	eswin_sdhci->clk_ahb = devm_clk_get(dev, "clk_ahb");
+	if (IS_ERR(eswin_sdhci->clk_ahb)) {
+		dev_err(dev, "clk_ahb clock not found.\n");
+		return PTR_ERR(eswin_sdhci->clk_ahb);
+	}
+
+	eswin_sdhci->clk_xin = devm_clk_get(dev, "clk_xin");
+	if (IS_ERR(eswin_sdhci->clk_xin)) {
+		dev_err(dev, "clk_xin clock not found.\n");
+		return PTR_ERR(eswin_sdhci->clk_xin);
+	}
+
+	clk_spll2_fout3 = devm_clk_get(dev, "clk_spll2_fout3");
+
+	if (IS_ERR(clk_spll2_fout3)) {
+		dev_err(dev, "clk_spll2_fout3 clock not found.\n");
+		return PTR_ERR(clk_spll2_fout3);
+	}
+
+	clk_mux = devm_clk_get(dev, "clk_mux1_1");
+	if (IS_ERR(clk_mux)) {
+		dev_err(dev, "clk_mux1_1 clock not found.\n");
+		return PTR_ERR(clk_spll2_fout3);
+	}
+	/*switch the core clk source*/
+	clk_set_parent(clk_mux, clk_spll2_fout3);
+
+
+	ret = clk_prepare_enable(eswin_sdhci->aclk);
+	if (ret) {
+		dev_err(dev, "Unable to enable aclk clock.\n");
+		return ret;
+	}
+
+	ret = clk_prepare_enable(eswin_sdhci->clk_ahb);
+	if (ret) {
+		dev_err(dev, "Unable to enable AHB clock.\n");
+		return ret;
+	}
+
+	ret = clk_prepare_enable(eswin_sdhci->clk_xin);
+	if (ret) {
+		dev_err(dev, "Unable to enable SD clock.\n");
+		return ret;
+	}
+
+	ret = eswin_sdhci_reset_init(dev, eswin_sdhci);
+	if (ret < 0) {
+		dev_err(dev, "failed to reset\n");
+		return ret;
+	}
+
+    return 0;
+}
+
 static int eswin_sd_probe(struct udevice *dev)
 {
 	struct mmc_uclass_priv *upriv = dev_get_uclass_priv(dev);
 	struct eswin_sd_plat *plat = dev_get_plat(dev);
-	struct eswin_sdhci_sdio_data *eswin_sdhci_sdio = dev_get_priv(dev);
+		struct eswin_sdhci_data *eswin_sdhci_sdio = dev_get_priv(dev);
 	struct sdhci_host *host = &eswin_sdhci_sdio->host;
 	int max_frequency, ret;
 	u32 val = 0;
@@ -267,6 +325,12 @@ static int eswin_sd_probe(struct udevice *dev)
 		eswin_sdhci_sdio->phy.enable_data_pullup = DISABLE;
 
 	max_frequency = dev_read_u32_default(dev, "max-frequency", 0);
+
+	ret = eswin_sd_clk_reset_init(dev);
+	if (ret) {
+		dev_err(dev, "%s %d, clk reset fail, ret %d!\r\n", __func__, __LINE__, ret);
+		return ret;
+	}
 
 	host->quirks = SDHCI_QUIRK_WAIT_SEND_CMD;
 	host->voltages = MMC_VDD_32_33;
@@ -323,6 +387,6 @@ U_BOOT_DRIVER(eswin_sd_drv) = {
 	.ops        = &sdhci_ops,
 	.bind       = eswin_sd_bind,
 	.probe      = eswin_sd_probe,
-	.priv_auto  = sizeof(struct eswin_sdhci_sdio_data),
+	.priv_auto  = sizeof(struct eswin_sdhci_data),
 	.plat_auto  = sizeof(struct eswin_sd_plat),
 };

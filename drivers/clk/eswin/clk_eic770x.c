@@ -494,6 +494,9 @@ static int eic770x_clk_enable(struct clk *clk)
 		case EIC7X_CLK_CLK_BOOTSPI:
 			__set_bit(31, base + EIC7X_REG_OFFSET_BOOTSPI_CLK_CTRL);
 			break;
+		case EIC7X_CLK_HSP_ACLK:
+			__set_bit(31, base + EIC7X_REG_OFFSET_HSP_ACLK_CTRL);
+			break;
 		default:
 			printf("%s %d:unsupport clk id %d\n",__func__,__LINE__, id);
 			return -EINVAL;

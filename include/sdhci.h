@@ -340,6 +340,7 @@ struct sdhci_host {
 	struct mmc *mmc;
 	const struct sdhci_ops *ops;
 	int index;
+	int node_id;
 
 	int bus_width;
 	struct gpio_desc pwr_gpio;	/* Power GPIO */

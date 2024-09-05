@@ -587,14 +587,93 @@
 		};
 		sdhci_emmc: sdhci@50450000 {
 			compatible = "eswin,emmc-sdhci-5.1";
+			clocks = <&cru EIC7X_CLK_HSP_MSHC0_CORE_CLK>,
+					<&cru EIC7X_CLK_HSP_CFG_CLK>,
+					<&cru EIC7X_CLK_HSP_ACLK>;
+			clock-names = "clk_xin", "clk_ahb", "aclk";
+			clock-output-names = "emmc_cardclock";
+			#clock-cells = <0>;
+			resets = <&rst HSPDMA_RST_CTRL SW_MSHC0_TXRX_RSTN>,
+				<&rst HSPDMA_RST_CTRL SW_MSHC0_PHY_RSTN>,
+				<&rst HSPDMA_RST_CTRL SW_HSP_EMMC_PRSTN>,
+				<&rst HSPDMA_RST_CTRL SW_HSP_EMMC_ARSTN>;
+			reset-names = "txrx_rst", "phy_rst", "prstn", "arstn";
 			reg = <0x0 0x50450000 0x0 0x10000>;
 			max-frequency = <200000000>;
-			emmc_phy_reg_base = <0x50450000>;
-			/*sdhci-caps-mask = <0x4 0x200000>;*/
 			disable-cqe-dcmd;
 			bus-width = <8>;
 			non-removeable;
 			index = <0>;
+			numa-node-id = <0>;
+			status = "disabled";
+		};
+		sd: sd@50460000 {
+			compatible = "eswin,sd-sdhci";
+			clocks =<&cru EIC7X_CLK_HSP_MSHC1_CORE_CLK>,
+				<&cru EIC7X_CLK_HSP_CFG_CLK>,
+				<&cru EIC7X_SPLL2_FOUT3>,
+				<&cru EIC7X_MUX_U_MSHCORE_ROOT_3MUX1_1>,
+				<&cru EIC7X_CLK_HSP_ACLK>;
+			clock-names ="clk_xin","clk_ahb","clk_spll2_fout3","clk_mux1_1", "aclk";
+			clock-output-names = "sdio0_cardclock";
+			#clock-cells = <0>;
+			resets = <&rst HSPDMA_RST_CTRL SW_MSHC1_TXRX_RSTN>,
+				<&rst HSPDMA_RST_CTRL SW_MSHC1_PHY_RSTN>,
+				<&rst HSPDMA_RST_CTRL SW_HSP_SD0_PRSTN>,
+				<&rst HSPDMA_RST_CTRL SW_HSP_SD0_ARSTN>;
+			reset-names = "txrx_rst","phy_rst","prstn","arstn";
+			reg = <0x0 0x50460000 0x0 0x10000>;
+			max-frequency = <208000000>;
+			bus-width = <4>;
+			index = <1>;
+			numa-node-id = <0>;
+			status = "disabled";
+		};
+
+		d1_sdhci_emmc: sdhci@70450000 {
+			compatible = "eswin,emmc-sdhci-5.1";
+			clocks = <&d1_cru EIC7X_CLK_HSP_MSHC0_CORE_CLK>,
+					<&d1_cru EIC7X_CLK_HSP_CFG_CLK>,
+					<&d1_cru EIC7X_CLK_HSP_ACLK>;
+			clock-names = "clk_xin", "clk_ahb", "aclk";
+			clock-output-names = "emmc_cardclock";
+			#clock-cells = <0>;
+			resets = <&d1_rst HSPDMA_RST_CTRL SW_MSHC0_TXRX_RSTN>,
+				<&d1_rst HSPDMA_RST_CTRL SW_MSHC0_PHY_RSTN>,
+				<&d1_rst HSPDMA_RST_CTRL SW_HSP_EMMC_PRSTN>,
+				<&d1_rst HSPDMA_RST_CTRL SW_HSP_EMMC_ARSTN>;
+			reset-names = "txrx_rst", "phy_rst", "prstn", "arstn";
+
+			reg = <0x0 0x70450000 0x0 0x10000>;
+			max-frequency = <200000000>;
+			disable-cqe-dcmd;
+			bus-width = <8>;
+			non-removeable;
+			index = <0>;
+			numa-node-id = <1>;
+			status = "disabled";
+		};
+		d1_sd: sd@70460000 {
+			compatible = "eswin,sd-sdhci";
+			clocks =<&d1_cru EIC7X_CLK_HSP_MSHC1_CORE_CLK>,
+				<&d1_cru EIC7X_CLK_HSP_CFG_CLK>,
+				<&d1_cru EIC7X_SPLL2_FOUT3>,
+				<&d1_cru EIC7X_MUX_U_MSHCORE_ROOT_3MUX1_1>,
+				<&d1_cru EIC7X_CLK_HSP_ACLK>;
+			clock-names ="clk_xin","clk_ahb","clk_spll2_fout3","clk_mux1_1", "aclk";
+			clock-output-names = "sdio0_cardclock";
+			#clock-cells = <0>;
+			resets = <&d1_rst HSPDMA_RST_CTRL SW_MSHC1_TXRX_RSTN>,
+				<&d1_rst HSPDMA_RST_CTRL SW_MSHC1_PHY_RSTN>,
+				<&d1_rst HSPDMA_RST_CTRL SW_HSP_SD0_PRSTN>,
+				<&d1_rst HSPDMA_RST_CTRL SW_HSP_SD0_ARSTN>;
+			reset-names = "txrx_rst","phy_rst","prstn","arstn";
+
+			reg = <0x0 0x70460000 0x0 0x10000>;
+			max-frequency = <208000000>;
+			bus-width = <4>;
+			index = <1>;
+			numa-node-id = <1>;
 			status = "disabled";
 		};
 
@@ -703,14 +782,6 @@
 			num-cs = <1>;
 			reg-io-width = <4>;
 
-		};
-		sd: sd@50460000 {
-			compatible = "eswin,sd-sdhci";
-			reg = <0x0 0x50460000 0x0 0x10000>;
-			max-frequency = <208000000>;
-			bus-width = <4>;
-			index = <1>;
-			status = "disabled";
 		};
 
 		mipi_dsi: dsi@50270000 {

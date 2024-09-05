@@ -25,10 +25,12 @@
 #include <linux/err.h>
 #include <linux/libfdt.h>
 #include <linux/delay.h>
+#include <linux/bug.h>
 #include <malloc.h>
 #include <mapmem.h>
 #include <sdhci.h>
 #include <clk.h>
+#include <reset.h>
 #include <mmc.h>
 #include <dm/device_compat.h>
 #include "eswin_sdhci.h"
@@ -47,26 +49,13 @@ struct eswin_sdhci_plat
 	struct mmc mmc;
 };
 
-struct eswin_sdhci_phy_data {
-	unsigned int drive_impedance;
-	unsigned int enable_strobe_pulldown;
-	unsigned int enable_data_pullup;
-	unsigned int enable_cmd_pullup;
-	unsigned int delay_code;
-};
-
-struct eswin_sdhci_data {
-	struct sdhci_host host;
-	struct eswin_sdhci_phy_data phy;
-};
-
 static void eswin_sdhci_coreclk_config(struct sdhci_host *host, unsigned short divisor, unsigned int flag_sel)
 {
 	u32 val = 0;
 	u32 delay = 0xfffff;
 	volatile u32 *addr;
 
-	addr = (u32 *)(ESWIN_MSHC_CORE_CLK_REG + host->index * 4);
+	addr = (u32 *)(HOST_DIE_OFFSET(host) + ESWIN_MSHC_CORE_CLK_REG + host->index * 4);
 
 	val = *addr;
 	val &= ~MSHC_CORE_CLK_ENABLE;
@@ -87,7 +76,7 @@ static void eswin_sdhci_coreclk_disable(struct sdhci_host *host)
 {
 	u32 val = 0;
 	volatile u32 *addr;
-	addr = (u32 *)(ESWIN_MSHC_CORE_CLK_REG + host->index * 4);
+	addr = (u32 *)(HOST_DIE_OFFSET(host) + ESWIN_MSHC_CORE_CLK_REG + host->index * 4);
 
 	val = *addr;
 	val &= ~MSHC_CORE_CLK_ENABLE;
@@ -120,7 +109,7 @@ void eswin_enable_card_clk(struct sdhci_host *host)
 		clk = sdhci_readw(host, SDHCI_CLOCK_CONTROL);
 		if (clk & SDHCI_CLOCK_INT_STABLE) break;
 		if (i > 15000) {
-			pr_err("sd %d: Internal clock never stabilised.\n", host->index);
+			pr_err("%s: Internal clock never stabilised.\n",mmc_hostname(host->mmc));
 			return;
 		}
 		udelay(10);
@@ -258,7 +247,7 @@ static void eswin_emmc_set_control_reg(struct sdhci_host *host)
 static int eswin_sdhci_phy_poweron(struct sdhci_host *host)
 {
 	unsigned long io_mem = (unsigned long)host->ioaddr;
-	unsigned long hsp_io_mem = HSP_IO_MEM;
+	unsigned long hsp_io_mem = HOST_DIE_OFFSET(host) + HSP_IO_MEM;
 	u32 ret32 = 0;
 
 
@@ -301,7 +290,7 @@ static int eswin_sdhci_pre_init(struct sdhci_host *host)
 	volatile unsigned int *addr;
 
 	/*sw rst*/
-	addr = (unsigned int *)(ESWIN_HSPDMA_RST_CTRL);
+	addr = (unsigned int *)(HOST_DIE_OFFSET(host) + ESWIN_HSPDMA_RST_CTRL);
 	reg_val = *addr;
 	reg_val |= ESWIN_HSPDMA_EMMC_RST;
 	*addr = reg_val;
@@ -583,6 +572,102 @@ static struct sdhci_ops eswin_emmc_ops = {
 	.config_dll = &eswin_sdhci_config_dll,
 };
 
+static void eswin_sdhci_do_reset(struct eswin_sdhci_data *eswin_sdhci)
+{
+	int ret;
+
+	ret = reset_assert(eswin_sdhci->txrx_rst);
+	WARN_ON(0 != ret);
+	ret = reset_assert(eswin_sdhci->phy_rst);
+	WARN_ON(0 != ret);
+	ret = reset_assert(eswin_sdhci->prstn);
+	WARN_ON(0 != ret);
+	ret = reset_assert(eswin_sdhci->arstn);
+	WARN_ON(0 != ret);
+
+	mdelay(2);
+
+	ret = reset_deassert(eswin_sdhci->txrx_rst);
+	WARN_ON(0 != ret);
+	ret = reset_deassert(eswin_sdhci->phy_rst);
+	WARN_ON(0 != ret);
+	ret = reset_deassert(eswin_sdhci->prstn);
+	WARN_ON(0 != ret);
+	ret = reset_deassert(eswin_sdhci->arstn);
+	WARN_ON(0 != ret);
+}
+
+int eswin_sdhci_reset_init(struct udevice *dev,
+				 struct eswin_sdhci_data *eswin_sdhci)
+{
+	int ret = 0;
+	eswin_sdhci->txrx_rst = devm_reset_control_get_optional(dev, "txrx_rst");
+	if (IS_ERR_OR_NULL(eswin_sdhci->txrx_rst)) {
+		dev_err(dev, "txrx_rst reset not found.\n");
+		return -EFAULT;
+	}
+
+	eswin_sdhci->phy_rst = devm_reset_control_get_optional(dev, "phy_rst");
+	if (IS_ERR_OR_NULL(eswin_sdhci->phy_rst)) {
+		dev_err(dev, "phy_rst reset not found.\n");
+		return -EFAULT;
+	}
+
+	eswin_sdhci->prstn = devm_reset_control_get_optional(dev, "prstn");
+	if (IS_ERR_OR_NULL(eswin_sdhci->prstn)) {
+		dev_err(dev, "prstn reset not found.\n");
+		return -EFAULT;
+	}
+
+	eswin_sdhci->arstn = devm_reset_control_get_optional(dev, "arstn");
+	if (IS_ERR_OR_NULL(eswin_sdhci->arstn)) {
+		dev_err(dev, "arstn reset not found.\n");
+		return -EFAULT;
+	}
+	eswin_sdhci_do_reset(eswin_sdhci);
+
+	return ret;
+}
+
+static int eswin_clk_reset_init(struct udevice *dev)
+{
+	int ret = 0;
+	struct eswin_sdhci_data *eswin_sdhci = dev_get_priv(dev);
+
+	eswin_sdhci->aclk = devm_clk_get(dev, "aclk");
+	if (IS_ERR(eswin_sdhci->aclk)) {
+		dev_err(dev, "aclk clock not found.\n");
+		return PTR_ERR(eswin_sdhci->aclk);
+	}
+
+	eswin_sdhci->clk_ahb = devm_clk_get(dev, "clk_ahb");
+	if (IS_ERR(eswin_sdhci->clk_ahb)) {
+		dev_err(dev, "clk_ahb clock not found.\n");
+		return PTR_ERR(eswin_sdhci->clk_ahb);
+	}
+
+	ret = clk_prepare_enable(eswin_sdhci->aclk);
+	if (ret) {
+		dev_err(dev, "Unable to enable aclk clock.\n");
+		return ret;
+	}
+
+	ret = clk_prepare_enable(eswin_sdhci->clk_ahb);
+	if (ret) {
+		dev_err(dev, "Unable to enable AHB clock.\n");
+		return ret;
+	}
+
+	ret = eswin_sdhci_reset_init(dev, eswin_sdhci);
+	if (ret < 0) {
+		dev_err(dev, "failed to reset\n");
+		return ret;
+	}
+
+    return 0;
+}
+
+
 static int eswin_sdhci_probe(struct udevice *dev)
 {
 	struct mmc_uclass_priv *upriv = dev_get_uclass_priv(dev);
@@ -592,12 +677,18 @@ static int eswin_sdhci_probe(struct udevice *dev)
 	int max_frequency, ret;
 	unsigned int val = 0;
 
+	ret = dev_read_s32(dev, "numa-node-id", &host->node_id);
+	if (ret) {
+		dev_err(dev, "%s %d, failed to get node id, ret %d!\r\n", __func__, __LINE__, ret);
+		return ret;
+	}
+
 	ret = dev_read_s32(dev, "index", &host->index);
 	if (ret) {
 		dev_err(dev, "%s %d, failed to get index id, ret %d!\r\n", __func__, __LINE__, ret);
 		return ret;
 	}
-	debug("mmc index:%d\n", host->index);
+	debug("mmc node_id:%d index:%d\n", host->node_id, host->index);
 
 	if (!dev_read_u32(dev, "delay_code", &val)) {
 		eswin_sdhci->phy.delay_code = val;
@@ -638,6 +729,12 @@ static int eswin_sdhci_probe(struct udevice *dev)
 		return -EINVAL;
 	}
 
+	ret = eswin_clk_reset_init(dev);
+	if (ret) {
+		dev_err(dev, "%s %d, clk reset failed, ret %d!\r\n", __func__, __LINE__, ret);
+		return ret;
+	}
+
 	host->quirks = SDHCI_QUIRK_WAIT_SEND_CMD;
 	host->max_clk = max_frequency;
 	/*
@@ -652,6 +749,7 @@ static int eswin_sdhci_probe(struct udevice *dev)
 	host->mmc->priv = &eswin_sdhci->host;
 	host->mmc->dev = dev;
 	upriv->mmc = host->mmc;
+	debug("host->ioaddr:0x%lx\n", (unsigned long)host->ioaddr);
 
 	ret = mmc_of_parse(dev, &plat->cfg);
 	if (ret) {

@@ -24,6 +24,7 @@
 
 #include <linux/bitops.h>
 
+#define HOST_DIE_OFFSET(host) (host->node_id * 0x20000000)
 #define ESWIN_MSHC_CORE_CLK_REG 0x51828160UL
 #define ESWIN_HSPDMA_RST_CTRL   0x5182841cUL
 #define ESWIN_HSPDMA_SD_RST ((0x7 << 3) | (0x7 << 6) | (1 << 17) | (1 << 18) | (1 << 21) | (1 << 22))
@@ -591,4 +592,23 @@ typedef struct
     volatile unsigned int rtc_rst_ctrl;            /* 0x4D0 */
 } SCU_TypeDef;
 
+struct eswin_sdhci_phy_data {
+	unsigned int drive_impedance;
+	unsigned int enable_strobe_pulldown;
+	unsigned int enable_data_pullup;
+	unsigned int enable_cmd_pullup;
+	unsigned int delay_code;
+};
+
+struct eswin_sdhci_data {
+	struct sdhci_host host;
+	struct eswin_sdhci_phy_data phy;
+	struct clk *clk_xin;
+	struct clk *aclk;
+	struct clk *clk_ahb;
+	struct reset_ctl *txrx_rst;
+	struct reset_ctl *phy_rst;
+	struct reset_ctl *prstn;
+	struct reset_ctl *arstn;
+};
 #endif
