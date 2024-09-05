@@ -69,9 +69,9 @@ enum fw_offset {
 enum fw_id {
 	PUBKEY_RSA_ID   = 0,
 	PUBKEY_ECC_ID   = 1,
-	D2D_FW_ID	    = 2,
-	FIRMWARE_ID	    = 3,
-	DDR_FW_ID	    = 4,
+	FIRMWARE_ID	    = 2,
+	DDR_FW_ID	    = 3,
+	D2D_FW_ID	    = 4,
 	BOOTLOADER_ID   = 5,
 	ERASE_ALL	    =100
 };
