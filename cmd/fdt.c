@@ -1074,8 +1074,16 @@ static int fdt_add_mmz(void *fdt, char *partition, uint64_t addr, uint64_t size)
 	}
 
 	subnode = fdt_add_subnode(fdt, parent, mmz_name);
-	if (subnode < 0)
-		return subnode;
+	if (subnode < 0) {
+		/* find the existed node */
+		if (subnode == -FDT_ERR_EXISTS) {
+			subnode = fdt_subnode_offset_namelen(fdt, parent, mmz_name, strlen(mmz_name));
+			if (subnode < 0)
+				return subnode;
+		}
+		else
+			return subnode;
+	}
 
 	err = fdt_setprop_empty(fdt, subnode, "no-map");
 	if (err < 0)
