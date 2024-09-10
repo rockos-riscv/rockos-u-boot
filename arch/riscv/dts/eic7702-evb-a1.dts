@@ -46,6 +46,7 @@
 		gpio0 = &gpio0;
 		spi0 = &bootspi;
 		spi1 = &dw_spi0;
+		spi2 = &d1_bootspi;
 	};
 
 	chosen {
@@ -157,10 +158,34 @@
 &uart1 {
 	status = "okay";
 };
+&cru {
+	status = "okay";
+};
+&rst {
+	status = "okay";
+};
+&d1_cru {
+	status = "okay";
+};
+&d1_rst {
+	status = "okay";
+};
 &bootspi {
 	status = "okay";
 	cs-gpios = <&portd 0 GPIO_ACTIVE_LOW>;
 	wp-gpios = <&portd 4 GPIO_ACTIVE_LOW>;
+	spi-flash@0 {
+		reg = <0>;
+		compatible = "winbond,w25q128fw",
+			"jedec,spi-nor";
+		spi-max-frequency = <4800000>;
+	};
+};
+
+&d1_bootspi{
+	status = "okay";
+	cs-gpios = <&d1_portd 0 GPIO_ACTIVE_LOW>;
+	wp-gpios = <&d1_portd 4 GPIO_ACTIVE_LOW>;
 	spi-flash@0 {
 		reg = <0>;
 		compatible = "winbond,w25q128fw",
@@ -197,8 +222,8 @@
 	enable-data-pullup;
 };
 
-&sdhci_emmc {
-	status = "okay";
+&d1_sdhci_emmc {
+	status = "disabled";
 	delay_code = <0x55>;
 	drive-impedance-ohm = <50>;
 	enable-cmd-pullup;
@@ -356,5 +381,17 @@
 */
 
 &gpio0 {
+	status = "okay";
+};
+
+&d1_gpio {
+	status = "okay";
+};
+
+&pinctrl {
+	status = "okay";
+};
+
+&d1_pinctrl {
 	status = "okay";
 };

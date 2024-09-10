@@ -180,22 +180,39 @@ static int emmc_write_bootchain(uint64_t src_addr, uint64_t offset, uint64_t siz
 }
 
 /******************************flash*********************************************/
-int es_spi_flash_probe(void)
+int es_spi_flash_probe(u32 num)
 {
-	unsigned int bus = CONFIG_SF_DEFAULT_BUS;
-	unsigned int cs = CONFIG_SF_DEFAULT_CS;
-	struct udevice *new;
+	struct udevice *bus, *dev;
+	char *node_name_d0 = "spi@51800000";
+	char *node_name_d1 = "spi@71800000";
+	char *node_name = NULL;
 	int ret;
 
-	if(flash == NULL) {
-		ret = spi_flash_probe_bus_cs(bus, cs, &new);
-		if (ret) {
-			printf("Failed to initialize SPI flash at %u:%u (error %d)\n",
-				bus, cs, ret);
-			return -1;
-		}
+	if(num == 0)
+		node_name = node_name_d0;
+	else
+		node_name = node_name_d1;
+	if (flash)
+		spi_flash_free(flash);
 
-		flash = dev_get_uclass_priv(new);
+	ret = uclass_get_device_by_name(UCLASS_SPI, node_name, &bus);
+	if(ret) {
+		return ret;
+	}
+	ret = spi_find_chip_select(bus, 0, &dev);
+	if(ret) {
+		printf("Invalid chip select :%d (err=%d)\n", 0, ret);
+		return ret;
+	}
+
+	if (!device_active(dev)) {
+		if(device_probe(dev))
+			return -1;
+	}
+	flash = dev_get_uclass_priv(dev);
+	if(!flash) {
+		printf("SPI dev_get_uclass_priv failed\n");
+		return -1;
 	}
 	return 0;
 }
@@ -428,7 +445,12 @@ static int do_bootchain_write(int argc, char *const argv[])
 		if(ret < 0)
 			return -ENOENT;
 	}else if (strcmp(argv[2], "flash") == 0){
-		ret = es_spi_flash_probe();
+		if (argc < 4)
+			ret = es_spi_flash_probe(0);
+		else if (strcmp(argv[3], "1") == 0) {
+			ret = es_spi_flash_probe(1);
+		} else
+			ret = es_spi_flash_probe(0);
 		if(ret < 0)
 			return -ENOENT;
 		flash_stg = 0;
@@ -663,7 +685,12 @@ static int do_bootchain_erase(int argc, char *const argv[])
 		if(ret < 0)
 			return -ENOENT;
 	}else if (strcmp(argv[2], "flash") == 0){
-		ret = es_spi_flash_probe();
+		if (argc < 4)
+			ret = es_spi_flash_probe(0);
+		else if (strcmp(argv[3], "1") == 0)
+			ret = es_spi_flash_probe(1);
+		else
+			ret = es_spi_flash_probe(0);
 		if(ret < 0)
 			return -ENOENT;
 		flash_stg = 0;
@@ -1134,7 +1161,12 @@ static int do_vendor_write(int argc, char *const argv[])
 	uint64_t fw_addr = simple_strtoul(argv[1], NULL, 16);
 	debug_printf("fw_addr 0x%llx\r\n", fw_addr);
 
-	ret = es_spi_flash_probe();
+	if (argc < 3)
+		ret = es_spi_flash_probe(0);
+	else if (strcmp(argv[2], "1") == 0)
+		ret = es_spi_flash_probe(1);
+	else
+		ret = es_spi_flash_probe(0);
 	if(ret < 0)
 		return -ENOENT;
 
@@ -1296,7 +1328,7 @@ usage:
 U_BOOT_CMD(
 	es_burn,	5,	0,	do_esburn_bootchain,
 	"ESWIN burn tool",
-	"\nes_burn write addr flash_stg	- write binary file from memory at `addr' to mtd\n"
+	"\nes_burn write addr flash_stg die_num	- write binary file from memory at `addr' to die0/die1 mtd(die_num 0:default/1)\n"
 	"es_burn erase fw_type flash_stg	- erase binary file who type is 'fw_type' from 'flash_stg'\n"
 	"es_burn wboot addr len flash_stg	- write bootmenu mode boot filesystem binary file from memory at `addr' to mtd 'flash_stg'\n"
 	"es_burn wroot addr len flash_stg	- write bootmenu mode root filesystem binary file from memory at `addr' to mtd 'flash_stg'\n"

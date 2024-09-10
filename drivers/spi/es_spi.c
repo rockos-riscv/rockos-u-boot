@@ -41,6 +41,500 @@
 #include <linux/iopoll.h>
 #include <linux/sizes.h>
 #include <command.h>
+#include <asm/cache.h>
+
+/* dma init */
+#define CHAN_OFFSET 		0x100
+
+/* Common registers offset */
+#define DMAC_ID			0x000 /* R DMAC ID */
+#define DMAC_COMPVER		0x008 /* R DMAC Component Version */
+#define DMAC_CFG		0x010 /* R/W DMAC Configuration */
+#define DMAC_CHEN		0x018 /* R/W DMAC Channel Enable */
+#define DMAC_CHEN_L		0x018 /* R/W DMAC Channel Enable 00-31 */
+#define DMAC_CHEN_H		0x01C /* R/W DMAC Channel Enable 32-63 */
+#define DMAC_INTSTATUS		0x030 /* R DMAC Interrupt Status */
+#define DMAC_COMMON_INTCLEAR	0x038 /* W DMAC Interrupt Clear */
+#define DMAC_COMMON_INTSTATUS_ENA 0x040 /* R DMAC Interrupt Status Enable */
+#define DMAC_COMMON_INTSIGNAL_ENA 0x048 /* R/W DMAC Interrupt Signal Enable */
+#define DMAC_COMMON_INTSTATUS	0x050 /* R DMAC Interrupt Status */
+#define DMAC_RESET		0x058 /* R DMAC Reset Register1 */
+
+/* DMA channel registers offset */
+#define CH_SAR			0x100 /* R/W Chan Source Address */
+#define CH_DAR			0x108 /* R/W Chan Destination Address */
+#define CH_BLOCK_TS		0x110 /* R/W Chan Block Transfer Size */
+#define CH_CTL			0x118 /* R/W Chan Control */
+#define CH_CTL_L		0x118 /* R/W Chan Control 00-31 */
+#define CH_CTL_H		0x11C /* R/W Chan Control 32-63 */
+#define CH_CFG			0x120 /* R/W Chan Configuration */
+#define CH_CFG_L		0x120 /* R/W Chan Configuration 00-31 */
+#define CH_CFG_H		0x124 /* R/W Chan Configuration 32-63 */
+#define CH_LLP			0x128 /* R/W Chan Linked List Pointer */
+#define CH_STATUS		0x130 /* R Chan Status */
+#define CH_SWHSSRC		0x138 /* R/W Chan SW Handshake Source */
+#define CH_SWHSDST		0x140 /* R/W Chan SW Handshake Destination */
+#define CH_BLK_TFR_RESUMEREQ	0x148 /* W Chan Block Transfer Resume Req */
+#define CH_AXI_ID		0x150 /* R/W Chan AXI ID */
+#define CH_AXI_QOS		0x158 /* R/W Chan AXI QOS */
+#define CH_SSTAT		0x160 /* R Chan Source Status */
+#define CH_DSTAT		0x168 /* R Chan Destination Status */
+#define CH_SSTATAR		0x170 /* R/W Chan Source Status Fetch Addr */
+#define CH_DSTATAR		0x178 /* R/W Chan Destination Status Fetch Addr */
+#define CH_INTSTATUS_ENA	0x180 /* R/W Chan Interrupt Status Enable */
+#define CH_INTSTATUS		0x188 /* R/W Chan Interrupt Status */
+#define CH_INTSIGNAL_ENA	0x190 /* R/W Chan Interrupt Signal Enable */
+#define CH_INTCLEAR		0x198 /* W Chan Interrupt Clear */
+
+/* DMAC_CFG */
+#define DMAC_EN_POS			0
+#define DMAC_EN_MASK			(0x1UL<<DMAC_EN_POS)
+
+#define INT_EN_POS			1
+#define INT_EN_MASK			(0x1UL<<INT_EN_POS)
+
+#define DMAC_CHAN_EN_SHIFT		0
+#define DMAC_CHAN_EN_WE_SHIFT		8
+#define	DMAC_CHAN_EN2_WE_SHIFT		16
+
+#define DMAC_CHAN_SUSP_SHIFT		16
+#define DMAC_CHAN_SUSP_WE_SHIFT		24
+
+/* CH_CTL_H */
+#define CH_CTL_H_ARLEN_EN		(0x1UL<<6)
+#define CH_CTL_H_ARLEN_POS		7
+#define CH_CTL_H_AWLEN_EN		(0x1UL<<15)
+#define CH_CTL_H_AWLEN_POS		16
+
+enum {
+	DWAXIDMAC_ARWLEN_1			= 0,
+	DWAXIDMAC_ARWLEN_2			= 1,
+	DWAXIDMAC_ARWLEN_4			= 3,
+	DWAXIDMAC_ARWLEN_8			= 7,
+	DWAXIDMAC_ARWLEN_16			= 15,
+	DWAXIDMAC_ARWLEN_32			= 31,
+	DWAXIDMAC_ARWLEN_64			= 63,
+	DWAXIDMAC_ARWLEN_128		= 127,
+	DWAXIDMAC_ARWLEN_256		= 255,
+	DWAXIDMAC_ARWLEN_MIN		= DWAXIDMAC_ARWLEN_1,
+	DWAXIDMAC_ARWLEN_MAX		= DWAXIDMAC_ARWLEN_256
+};
+
+#define CH_CTL_H_LLI_LAST		(0x1UL<<30)
+#define CH_CTL_H_LLI_VALID		(0x1UL<<31)
+
+/* CH_CTL_L */
+#define CH_CTL_L_LAST_WRITE_EN		(0x1UL<<30)
+
+#define CH_CTL_L_DST_MSIZE_POS		18
+#define CH_CTL_L_SRC_MSIZE_POS		14
+
+enum dma_burst_length{
+	DWAXIDMAC_BURST_TRANS_LEN_1	= 0,
+	DWAXIDMAC_BURST_TRANS_LEN_4,
+	DWAXIDMAC_BURST_TRANS_LEN_8,
+	DWAXIDMAC_BURST_TRANS_LEN_16,
+	DWAXIDMAC_BURST_TRANS_LEN_32,
+	DWAXIDMAC_BURST_TRANS_LEN_64,
+	DWAXIDMAC_BURST_TRANS_LEN_128,
+	DWAXIDMAC_BURST_TRANS_LEN_256,
+	DWAXIDMAC_BURST_TRANS_LEN_512,
+	DWAXIDMAC_BURST_TRANS_LEN_1024
+};
+
+#define CH_CTL_L_DST_WIDTH_POS		11
+#define CH_CTL_L_SRC_WIDTH_POS		8
+
+enum dma_transfer_width{
+	DWAXIDMAC_TRANS_WIDTH_8		= 0,
+	DWAXIDMAC_TRANS_WIDTH_16,
+	DWAXIDMAC_TRANS_WIDTH_32,
+	DWAXIDMAC_TRANS_WIDTH_64,
+	DWAXIDMAC_TRANS_WIDTH_128,
+	DWAXIDMAC_TRANS_WIDTH_256,
+	DWAXIDMAC_TRANS_WIDTH_512,
+	DWAXIDMAC_TRANS_WIDTH_MAX	= DWAXIDMAC_TRANS_WIDTH_512
+};
+
+#define CH_CTL_L_DST_INC_POS		6
+#define CH_CTL_L_SRC_INC_POS		4
+enum dma_increment {
+	DWAXIDMAC_CH_CTL_L_INC		= 0,
+	DWAXIDMAC_CH_CTL_L_NOINC
+};
+
+#define CH_CTL_L_DST_MASTET		2
+#define CH_CTL_L_SRC_MASTET		0
+
+enum dma_mast {
+	DWAXIDMAC_CH_CTL_L_MASTER0		= 0,
+	DWAXIDMAC_CH_CTL_L_MASTER1
+};
+
+/* CH_CFG_H */
+#define CH_CFG_H_PRIORITY_POS		17
+
+#define CH_CFG_H_DST_PER			12
+#define CH_CFG_H_SRC_PER			7
+
+enum dma_hw_hs_port{
+	DWAXIDMAC_HS_PORT_UART1RX	= 32,
+	DWAXIDMAC_HS_PORT_UART1TX	= 33,
+	DWAXIDMAC_HS_PORT_UART0RX	= 34,
+	DWAXIDMAC_HS_PORT_UART0TX	= 35,
+	DWAXIDMAC_HS_PORT_I2C0TX,
+	DWAXIDMAC_HS_PORT_I2C0RX,
+	DWAXIDMAC_HS_PORT_I2C1TX,
+	DWAXIDMAC_HS_PORT_I2C1RX,
+	DWAXIDMAC_HS_PORT_BOOTSPI_REQ = 40
+};
+
+
+#define CH_CFG_H_HS_SEL_DST_POS		4
+#define CH_CFG_H_HS_SEL_SRC_POS		3
+enum dma_handshake_select{
+	DWAXIDMAC_HS_SEL_HW		= 0,
+	DWAXIDMAC_HS_SEL_SW
+};
+
+#define CH_CFG_H_TT_FC_POS		0
+enum dma_transfer_direction{
+	DWAXIDMAC_TT_FC_MEM_TO_MEM_DMAC	= 0,
+	DWAXIDMAC_TT_FC_MEM_TO_PER_DMAC,
+	DWAXIDMAC_TT_FC_PER_TO_MEM_DMAC,
+	DWAXIDMAC_TT_FC_PER_TO_PER_DMAC,
+	DWAXIDMAC_TT_FC_PER_TO_MEM_SRC,
+	DWAXIDMAC_TT_FC_PER_TO_PER_SRC,
+	DWAXIDMAC_TT_FC_MEM_TO_PER_DST,
+	DWAXIDMAC_TT_FC_PER_TO_PER_DST
+};
+
+
+/* CH_CFG2 */
+#define CH_CFG2_L_SRC_PER_POS		4
+#define CH_CFG2_L_DST_PER_POS		11
+
+#define CH_CFG2_H_TT_FC_POS		0
+#define CH_CFG2_H_HS_SEL_SRC_POS	3
+#define CH_CFG2_H_HS_SEL_DST_POS	4
+#define CH_CFG2_H_PRIORITY_POS		15
+#define CH_CFG2_H_SRC_OSR_LMT_POS	23
+#define CH_CFG2_H_DST_OSR_LMT_POS	27
+
+
+#define CH_CFG_L_DST_MULTBLK_TYPE_POS	2
+#define CH_CFG_L_SRC_MULTBLK_TYPE_POS	0
+
+
+enum dma_mblk_type{
+	DWAXIDMAC_MBLK_TYPE_CONTIGUOUS	= 0,
+	DWAXIDMAC_MBLK_TYPE_RELOAD,
+	DWAXIDMAC_MBLK_TYPE_SHADOW_REG,
+	DWAXIDMAC_MBLK_TYPE_LL
+};
+
+/**
+ * DW AXI DMA channel interrupts
+ *
+ * @DWAXIDMAC_IRQ_NONE: Bitmask of no one interrupt
+ * @DWAXIDMAC_IRQ_BLOCK_TRF: Block transfer complete
+ * @DWAXIDMAC_IRQ_DMA_TRF: Dma transfer complete
+ * @DWAXIDMAC_IRQ_SRC_TRAN: Source transaction complete
+ * @DWAXIDMAC_IRQ_DST_TRAN: Destination transaction complete
+ * @DWAXIDMAC_IRQ_SRC_DEC_ERR: Source decode error
+ * @DWAXIDMAC_IRQ_DST_DEC_ERR: Destination decode error
+ * @DWAXIDMAC_IRQ_SRC_SLV_ERR: Source slave error
+ * @DWAXIDMAC_IRQ_DST_SLV_ERR: Destination slave error
+ * @DWAXIDMAC_IRQ_LLI_RD_DEC_ERR: LLI read decode error
+ * @DWAXIDMAC_IRQ_LLI_WR_DEC_ERR: LLI write decode error
+ * @DWAXIDMAC_IRQ_LLI_RD_SLV_ERR: LLI read slave error
+ * @DWAXIDMAC_IRQ_LLI_WR_SLV_ERR: LLI write slave error
+ * @DWAXIDMAC_IRQ_INVALID_ERR: LLI invalid error or Shadow register error
+ * @DWAXIDMAC_IRQ_MULTIBLKTYPE_ERR: Slave Interface Multiblock type error
+ * @DWAXIDMAC_IRQ_DEC_ERR: Slave Interface decode error
+ * @DWAXIDMAC_IRQ_WR2RO_ERR: Slave Interface write to read only error
+ * @DWAXIDMAC_IRQ_RD2RWO_ERR: Slave Interface read to write only error
+ * @DWAXIDMAC_IRQ_WRONCHEN_ERR: Slave Interface write to channel error
+ * @DWAXIDMAC_IRQ_SHADOWREG_ERR: Slave Interface shadow reg error
+ * @DWAXIDMAC_IRQ_WRONHOLD_ERR: Slave Interface hold error
+ * @DWAXIDMAC_IRQ_LOCK_CLEARED: Lock Cleared Status
+ * @DWAXIDMAC_IRQ_SRC_SUSPENDED: Source Suspended Status
+ * @DWAXIDMAC_IRQ_SUSPENDED: Channel Suspended Status
+ * @DWAXIDMAC_IRQ_DISABLED: Channel Disabled Status
+ * @DWAXIDMAC_IRQ_ABORTED: Channel Aborted Status
+ * @DWAXIDMAC_IRQ_ALL_ERR: Bitmask of all error interrupts
+ * @DWAXIDMAC_IRQ_ALL: Bitmask of all interrupts
+ */
+enum {
+	DWAXIDMAC_IRQ_NONE		= 0,
+	DWAXIDMAC_IRQ_BLOCK_TRF		= (0x1UL<<0),
+	DWAXIDMAC_IRQ_DMA_TRF		= (0x1UL<<1),
+	DWAXIDMAC_IRQ_SRC_TRAN		= (0x1UL<<3),
+	DWAXIDMAC_IRQ_DST_TRAN		= (0x1UL<<4),
+	DWAXIDMAC_IRQ_SRC_DEC_ERR	= (0x1UL<<5),
+	DWAXIDMAC_IRQ_DST_DEC_ERR	= (0x1UL<<6),
+	DWAXIDMAC_IRQ_SRC_SLV_ERR	= (0x1UL<<7),
+	DWAXIDMAC_IRQ_DST_SLV_ERR	= (0x1UL<<8),
+	DWAXIDMAC_IRQ_LLI_RD_DEC_ERR	= (0x1UL<<9),
+	DWAXIDMAC_IRQ_LLI_WR_DEC_ERR	= (0x1UL<<10),
+	DWAXIDMAC_IRQ_LLI_RD_SLV_ERR	= (0x1UL<<11),
+	DWAXIDMAC_IRQ_LLI_WR_SLV_ERR	= (0x1UL<<12),
+	DWAXIDMAC_IRQ_INVALID_ERR	= (0x1UL<<13),
+	DWAXIDMAC_IRQ_MULTIBLKTYPE_ERR	= (0x1UL<<14),
+	DWAXIDMAC_IRQ_DEC_ERR		= (0x1UL<<16),
+	DWAXIDMAC_IRQ_WR2RO_ERR		= (0x1UL<<17),
+	DWAXIDMAC_IRQ_RD2RWO_ERR	= (0x1UL<<18),
+	DWAXIDMAC_IRQ_WRONCHEN_ERR	= (0x1UL<<19),
+	DWAXIDMAC_IRQ_SHADOWREG_ERR	= (0x1UL<<20),
+	DWAXIDMAC_IRQ_WRONHOLD_ERR	= (0x1UL<<21),
+	DWAXIDMAC_IRQ_LOCK_CLEARED	= (0x1UL<<27),
+	DWAXIDMAC_IRQ_SRC_SUSPENDED	= (0x1UL<<28),
+	DWAXIDMAC_IRQ_SUSPENDED		= (0x1UL<<29),
+	DWAXIDMAC_IRQ_DISABLED		= (0x1UL<<30),
+	DWAXIDMAC_IRQ_ABORTED		= (0x1UL<<31),
+	DWAXIDMAC_IRQ_ALL_ERR		= ((0x3ffUL << 5) | ( 0x3fUL<< 16)),//(GENMASK(21, 16) | GENMASK(14, 5)),
+	DWAXIDMAC_IRQ_ALL		= (0xffffffffUL << 0)//GENMASK(31, 0)
+};
+
+
+
+struct dma_slave_config {
+	enum dma_transfer_direction direction;
+    unsigned long src_addr;
+    unsigned long dst_addr;
+    unsigned int chan_priority;
+    unsigned int chan_block_ts;
+    enum dma_increment src_inc;
+    enum dma_increment dst_inc;
+    enum dma_mblk_type src_mblock_type;
+    enum dma_mblk_type dst_mblock_type;
+    enum dma_transfer_width src_ts_width;
+    enum dma_transfer_width dst_ts_width;
+    enum dma_burst_length src_burst;
+    enum dma_burst_length dst_burst;
+	enum dma_handshake_select src_hs_sel;
+	enum dma_handshake_select dst_hs_sel;
+	enum dma_hw_hs_port src_hs_port;
+	enum dma_hw_hs_port dst_hs_port;
+};
+
+
+struct dw_axi_dma {
+	void __iomem	*dma_base;
+	unsigned int	chan_id;
+	struct dma_slave_config	config;
+};
+
+void axi_dma_iowrite32(struct dw_axi_dma *dw, unsigned int reg, unsigned int val)
+{
+	writel(val, (void *)(dw->dma_base + reg));
+}
+
+unsigned int axi_dma_ioread32(struct dw_axi_dma *dw, unsigned int reg)
+{
+	return readl((void *)(dw->dma_base + reg));
+}
+
+void axi_chan_iowrite32(struct dw_axi_dma *dw, unsigned int reg, unsigned int val)
+{
+	writel(val, (void *)(dw->dma_base + reg + CHAN_OFFSET * dw->chan_id));
+}
+
+unsigned int axi_chan_ioread32(struct dw_axi_dma *dw, unsigned int reg)
+{
+	return readl((void *)(dw->dma_base + reg + CHAN_OFFSET*dw->chan_id));
+}
+
+void axi_chan_iowrite64(struct dw_axi_dma *dw, unsigned int reg, unsigned long val)
+{
+	/*
+	 * We split one 64 bit write for two 32 bit write as some HW doesn't
+	 * support 64 bit access.
+	 */
+	writel(lower_32_bits(val), (void *)(dw->dma_base + reg + CHAN_OFFSET*dw->chan_id));
+	writel(upper_32_bits(val), (void *)(dw->dma_base + reg + CHAN_OFFSET*dw->chan_id + 4));
+}
+
+unsigned long axi_chan_ioread64(struct dw_axi_dma *dw, unsigned int reg, unsigned long val)
+{
+	/*
+	 * We split one 64 bit write for two 32 bit write as some HW doesn't
+	 * support 64 bit access.
+	 */
+	unsigned long reg_data;
+	reg_data = readl((void *)(dw->dma_base + reg + CHAN_OFFSET * dw->chan_id));
+	reg_data |= ((unsigned long)readl((void *)(dw->dma_base + reg + CHAN_OFFSET * dw->chan_id + 4)) << 32);
+	return reg_data;
+}
+
+
+unsigned int axi_dma_get_irq_state(struct dw_axi_dma *dw)
+{
+	return readl((void *)(dw->dma_base + DMAC_INTSTATUS));
+}
+
+unsigned long axi_chan_get_irq_state(struct dw_axi_dma *dw)
+{
+	unsigned long reg_data;
+	reg_data = readl((void *)(dw->dma_base + CH_INTSTATUS + CHAN_OFFSET * dw->chan_id));
+	reg_data |= ((unsigned long)readl((void *)(dw->dma_base + CH_INTSTATUS + CHAN_OFFSET * dw->chan_id + 4)) << 32);
+	return reg_data;
+}
+
+void axi_chan_irq_clear(struct dw_axi_dma *dw, unsigned int irq_mask)
+{
+	writel(irq_mask, (void *)(dw->dma_base + CH_INTCLEAR + CHAN_OFFSET * dw->chan_id));
+}
+
+void axi_dma_disable(struct dw_axi_dma *dw)
+{
+	unsigned int val;
+
+	val = axi_dma_ioread32(dw, DMAC_CFG);
+	val &= ~DMAC_EN_MASK;
+	axi_dma_iowrite32(dw, DMAC_CFG, val);
+}
+
+void axi_dma_enable(struct dw_axi_dma *dw)
+{
+	unsigned int val;
+
+	val = axi_dma_ioread32(dw, DMAC_CFG);
+
+	val |= DMAC_EN_MASK;
+	axi_dma_iowrite32(dw, DMAC_CFG, val);
+}
+
+void axi_dma_irq_disable(struct dw_axi_dma *dw)
+{
+	unsigned int val;
+
+	val = axi_dma_ioread32(dw, DMAC_CFG);
+	val &= ~INT_EN_MASK;
+	axi_dma_iowrite32(dw, DMAC_CFG, val);
+}
+
+void axi_dma_irq_enable(struct dw_axi_dma *dw)
+{
+	unsigned int val;
+
+	val = axi_dma_ioread32(dw, DMAC_CFG);
+	val |= INT_EN_MASK;
+	axi_dma_iowrite32(dw, DMAC_CFG, val);
+	
+}
+
+void axi_chan_irq_disable(struct dw_axi_dma *dw, unsigned int irq_mask)
+{
+	if (likely(irq_mask == DWAXIDMAC_IRQ_ALL)) {
+		axi_chan_iowrite32(dw, CH_INTSTATUS_ENA, DWAXIDMAC_IRQ_NONE);
+	} else {
+		unsigned int val;
+		val = axi_chan_ioread32(dw, CH_INTSTATUS_ENA);
+		val &= ~irq_mask;
+		axi_chan_iowrite32(dw, CH_INTSTATUS_ENA, val);
+	}
+}
+
+void axi_chan_irq_set(struct dw_axi_dma *dw, unsigned int irq_mask)
+{
+	axi_chan_iowrite32(dw, CH_INTSTATUS_ENA, irq_mask);
+}
+
+void axi_chan_irq_sig_set(struct dw_axi_dma *dw, unsigned int irq_mask)
+{
+	axi_chan_iowrite32(dw, CH_INTSIGNAL_ENA, irq_mask);
+}
+
+unsigned int axi_chan_irq_read(struct dw_axi_dma *dw)
+{
+	return axi_chan_ioread32(dw, CH_INTSTATUS);
+}
+
+void axi_chan_disable(struct dw_axi_dma *dw)
+{
+	unsigned int val;
+	val = axi_dma_ioread32(dw, DMAC_CHEN);
+	val &= ~((0x1UL << dw->chan_id) << DMAC_CHAN_EN_SHIFT);
+	val &= ~((0x1UL << dw->chan_id) << DMAC_CHAN_EN2_WE_SHIFT);
+	axi_dma_iowrite32(dw, DMAC_CHEN, val);
+}
+
+void axi_chan_enable(struct dw_axi_dma *dw)
+{
+	unsigned int val;
+	val = axi_dma_ioread32(dw, DMAC_CHEN);
+	val |= (0x1UL << dw->chan_id) << DMAC_CHAN_EN_SHIFT |
+		(0x1UL << dw->chan_id) << DMAC_CHAN_EN2_WE_SHIFT;
+	axi_dma_iowrite32(dw, DMAC_CHEN, val);
+}
+
+bool axi_chan_is_hw_enable(struct dw_axi_dma *dw)
+{
+	unsigned int val;
+
+	val = axi_dma_ioread32(dw, DMAC_CHEN);
+	return !!(val & ((0x1UL<<dw->chan_id) << DMAC_CHAN_EN_SHIFT));
+}
+
+int dma_enable(struct dw_axi_dma *dw)
+{
+	unsigned int cfg_lo, cfg_hi, reg, irq_mask;
+	axi_dma_enable(dw);
+	axi_dma_irq_enable(dw);
+	axi_chan_disable(dw);
+    if( axi_chan_is_hw_enable(dw)) {
+        printf("chan enable file!\n");
+	    return -1;
+    }
+	cfg_lo = (dw->config.dst_mblock_type << CH_CFG_L_DST_MULTBLK_TYPE_POS | \
+		dw->config.src_mblock_type << CH_CFG_L_SRC_MULTBLK_TYPE_POS);
+
+
+	cfg_lo |= dw->config.src_hs_port << CH_CFG2_L_SRC_PER_POS |
+			dw->config.dst_hs_port << CH_CFG2_L_DST_PER_POS ;
+
+	cfg_hi = (dw->config.direction << CH_CFG2_H_TT_FC_POS |
+		dw->config.chan_priority << CH_CFG2_H_PRIORITY_POS | 
+		dw->config.src_hs_sel << CH_CFG2_H_HS_SEL_SRC_POS |
+		dw->config.dst_hs_sel << CH_CFG2_H_HS_SEL_DST_POS |
+		0xF <<CH_CFG2_H_SRC_OSR_LMT_POS |
+		0xF <<CH_CFG2_H_DST_OSR_LMT_POS );
+			
+	axi_chan_iowrite32(dw, CH_CFG_L, cfg_lo);
+	axi_chan_iowrite32(dw, CH_CFG_H, cfg_hi);
+
+	axi_chan_iowrite64(dw, CH_SAR, dw->config.src_addr);
+	axi_chan_iowrite64(dw, CH_DAR, dw->config.dst_addr);
+	axi_chan_iowrite32(dw, CH_BLOCK_TS, (dw->config.chan_block_ts - 1));
+
+	reg = dw->config.src_inc << CH_CTL_L_SRC_INC_POS | dw->config.dst_inc << CH_CTL_L_DST_INC_POS | 				\
+		  dw->config.src_ts_width << CH_CTL_L_SRC_WIDTH_POS | dw->config.dst_ts_width << CH_CTL_L_DST_WIDTH_POS | 	\
+		  dw->config.src_burst << CH_CTL_L_SRC_MSIZE_POS | dw->config.dst_burst << CH_CTL_L_DST_MSIZE_POS ;
+	// if( dw->config.src_hs_sel == DWAXIDMAC_HS_SEL_HW)
+	{
+		reg |=	DWAXIDMAC_CH_CTL_L_MASTER1 << CH_CTL_L_SRC_MASTET;
+	}
+	// if( dw->config.dst_hs_sel == DWAXIDMAC_HS_SEL_HW)
+	{
+
+		reg |=	DWAXIDMAC_CH_CTL_L_MASTER1 << CH_CTL_L_DST_MASTET;
+	}
+	axi_chan_iowrite32(dw, CH_CTL_L, reg);
+
+	axi_chan_iowrite32(dw, CH_CTL_H, 0x1 << 26);
+
+	// irq_mask = DWAXIDMAC_IRQ_ALL;
+	irq_mask = DWAXIDMAC_IRQ_DMA_TRF | DWAXIDMAC_IRQ_ALL_ERR | DWAXIDMAC_IRQ_BLOCK_TRF; // | DWAXIDMAC_IRQ_SRC_TRAN | DWAXIDMAC_IRQ_DST_TRAN;
+	axi_chan_irq_sig_set(dw, irq_mask);
+
+	/* Generate 'suspend' status but don't generate interrupt */
+	axi_chan_irq_set(dw, irq_mask);
+
+	axi_chan_enable(dw);
+
+	return 0;
+}
 
 /* Register offsets */
 #define ES_SPI_CSR_00			0x00	/*WRITE_STATUS_REG_TIME*/
@@ -60,7 +554,7 @@
 #define ES_SPI_CSR_14			0x38	/*CHIP_ERASE_TIME*/
 #define ES_SPI_CSR_15			0x3c	/*CHIP_DESELECT_TIME*/
 #define ES_SPI_CSR_16			0x40	/*POWER_DOWN_TIME*/
-#define ES_SPI_DR				0x5c000000ul
+#define ES_SPI_DR				0xa800000ul
 
 #define ES_SYSCSR_SPICLK_CTR			0x104
 #define ES_SYSCSR_SPICFGCLK_CTR			0x108
@@ -71,6 +565,7 @@
 
 #define SPI_COMMAND_VALID				0x01
 #define SPI_COMMAND_MOVE_VALUE			0x00
+#define SPI_COMMAND_MOVE_DMA			0x01
 #define SPI_COMMAND_CODE_FIELD_POSITION 0X06
 #define SPI_COMMAND_MOVE_FIELD_POSITION 0X05
 #define SPI_COMMAND_TYPE_FIELD_POSITION 0X01
@@ -186,6 +681,7 @@ struct es_spi_plat {
 struct es_spi_priv {
 	struct clk clk;
 	struct reset_ctl_bulk resets;
+	struct dw_axi_dma dma;
 	struct gpio_desc *cs_gpio;	/* External chip-select gpio */
 	struct gpio_desc *wp_gpio;	/* External wp gpio */
 
@@ -264,15 +760,12 @@ static int es_spi_dwc_init(struct udevice *bus, struct es_spi_priv *priv)
 
 static int spi_wait_over(struct es_spi_priv *priv)
 {
-	uint8_t register_data = 0;
-
+	uint32_t register_data = 0;
 	while(es_read(priv, ES_SPI_CSR_06) & 0x1);
-
 	//check flash status register' busy bit to make sure operation is finish.
 	while (register_data & 0x1) {
 		es_read_flash_status_register(priv, &register_data, SPINOR_OP_RDSR);
 	}
-
 	return 0;
 }
 
@@ -348,7 +841,6 @@ static void spi_hw_init(struct udevice *bus, struct es_spi_priv *priv)
 	es_write(priv, ES_SPI_CSR_12, small_block_erase_time_cycles);
 	es_write(priv, ES_SPI_CSR_13, large_block_erase_time_cycles);
 	es_write(priv, ES_SPI_CSR_14, chip_erase_time_cycles);
-	es_write(priv, ES_SPI_CSR_08, 0x0);
 
 	if (!priv->fifo_len) {
 		priv->fifo_len = 256;
@@ -379,11 +871,9 @@ __weak int es_spi_get_clk(struct udevice *bus, ulong *rate)
 	ret = clk_enable(&priv->clk);
 	if (ret && ret != -ENOSYS && ret != -ENOTSUPP)
 		return ret;
-	/*
-	ret = clk_set_rate(&priv->clk, 50000000);
+	ret = clk_set_rate(&priv->clk, 40000000);
 	if (ret)
 		return ret;
-	*/
 	*rate = clk_get_rate(&priv->clk);
 	if (!*rate)
 		goto err_rate;
@@ -417,7 +907,9 @@ static int es_spi_reset(struct udevice *bus)
 			 ret);
 		return ret;
 	}
-
+	ret = reset_release_bulk(&priv->resets);
+	if (ret)
+		return ret;
 	ret = reset_deassert_bulk(&priv->resets);
 	if (ret) {
 		reset_release_bulk(&priv->resets);
@@ -432,6 +924,20 @@ static int es_spi_reset(struct udevice *bus)
 typedef int (*es_spi_init_t)(struct udevice *bus, struct es_spi_priv *priv);
 
 
+#define HAL_DMA0_BASE            (0x518c0000ul)
+#define GET_DIE_OFFSET(a) (a - 0x51800000UL)
+void dma_init(struct es_spi_priv *priv)
+{
+	priv->dma.dma_base		= GET_DIE_OFFSET(priv->regs) + HAL_DMA0_BASE;
+	priv->dma.chan_id		= 0;
+	priv->dma.config.chan_priority = 0;
+	priv->dma.config.src_ts_width = DWAXIDMAC_TRANS_WIDTH_32;
+	priv->dma.config.dst_ts_width = DWAXIDMAC_TRANS_WIDTH_32;
+	priv->dma.config.src_mblock_type = DWAXIDMAC_MBLK_TYPE_CONTIGUOUS;
+	priv->dma.config.dst_mblock_type = DWAXIDMAC_MBLK_TYPE_CONTIGUOUS;
+	priv->dma.config.src_hs_port = DWAXIDMAC_HS_PORT_BOOTSPI_REQ;
+	priv->dma.config.dst_hs_port = DWAXIDMAC_HS_PORT_BOOTSPI_REQ;
+}
 static int es_spi_probe(struct udevice *bus)
 {
 	es_spi_init_t init = (es_spi_init_t)dev_get_driver_data(bus);
@@ -442,7 +948,7 @@ static int es_spi_probe(struct udevice *bus)
 	priv->regs = plat->regs;
 	priv->sys_regs = plat->sys_regs;
 	priv->freq = plat->frequency;
-	priv->flash_base = (void *)(uintptr_t)ES_SPI_DR;
+	priv->flash_base = (void *)(uintptr_t)(plat->regs + ES_SPI_DR);
 	priv->write_status_reg_time = plat->write_status_reg_time;
 	priv->page_program_time = plat->page_program_time;
 	priv->sector_erase_time = plat->sector_erase_time;
@@ -472,6 +978,7 @@ static int es_spi_probe(struct udevice *bus)
 
 	/* Basic HW init */
 	spi_hw_init(bus, priv);
+	dma_init(priv);
 
 	priv->wp_gpio = devm_gpiod_get(bus, "wp", GPIOD_IS_OUT | GPIOD_IS_OUT_ACTIVE);
 	if (IS_ERR(priv->wp_gpio)) {
@@ -500,24 +1007,19 @@ static void spi_read_write_cfg(struct es_spi_priv *priv, u32 byte, u32 addr)
  */
 static void spi_send_data(struct es_spi_priv *priv, u32 *dest, u32 size)
 {
-    u32  offset          = 0;
-    u8  *write_byte_buff = NULL;
-    u32  flash_end_data  = 0;
-
-    while (size >= SPI_FLASH_WR_WORD) {
-        es_data_write(priv, offset, *dest++);
-        offset = offset + SPI_FLASH_WR_WORD;
-        size   = size - SPI_FLASH_WR_WORD;
-    }
-
-    if (size != 0) {
-        write_byte_buff = (u8 *)dest;
-        for (int i = 0; i < size; i++) {
-            flash_end_data |= (*write_byte_buff) << (8 * i);
-            write_byte_buff++;
-        }
-        es_data_write(priv, offset, flash_end_data);
-    }
+	es_write(priv, ES_SPI_CSR_08, 0x5);
+	size = (size + SPI_FLASH_WR_WORD -1) / SPI_FLASH_WR_WORD;
+	priv->dma.config.direction = DWAXIDMAC_TT_FC_MEM_TO_PER_DMAC;
+	priv->dma.config.src_inc = DWAXIDMAC_CH_CTL_L_INC;
+	priv->dma.config.dst_inc = DWAXIDMAC_CH_CTL_L_NOINC;
+	priv->dma.config.chan_block_ts = size;
+	priv->dma.config.src_burst = DWAXIDMAC_BURST_TRANS_LEN_64;
+	priv->dma.config.dst_burst = DWAXIDMAC_BURST_TRANS_LEN_64;
+	priv->dma.config.src_addr = (unsigned long)dest;
+	priv->dma.config.dst_addr = (unsigned long)priv->flash_base;
+	priv->dma.config.src_hs_sel = DWAXIDMAC_HS_SEL_SW;
+	priv->dma.config.dst_hs_sel = DWAXIDMAC_HS_SEL_HW;
+	dma_enable(&priv->dma);
 }
 
 /**
@@ -525,43 +1027,65 @@ static void spi_send_data(struct es_spi_priv *priv, u32 *dest, u32 size)
  */
 static void spi_recv_data(struct es_spi_priv *priv, u32 *dest, u32 size)
 {
-    u32  offset         = 0;
-    u8  *read_byte_buff = NULL;
-    u32  flash_end_data = 0xFFFFFFFF;
-
-    while (size >= SPI_FLASH_WR_WORD) {
-        *dest++ = es_data_read(priv, offset);
-        offset = offset + SPI_FLASH_WR_WORD;
-        size   = size - SPI_FLASH_WR_WORD;
-    }
-    if (size != 0) {
-        read_byte_buff = (u8 *)dest;
-        flash_end_data = es_data_read(priv, offset);
-        for (int i = 0; i < size; i++) {
-            *read_byte_buff = (u8)(flash_end_data >> (8 * i));
-            read_byte_buff++;
-        }
-    }
+	es_write(priv, ES_SPI_CSR_08, 0x0);
+	size = (size + SPI_FLASH_WR_WORD -1) / SPI_FLASH_WR_WORD;
+	priv->dma.config.direction = DWAXIDMAC_TT_FC_MEM_TO_MEM_DMAC;
+	priv->dma.config.src_inc = DWAXIDMAC_CH_CTL_L_INC;
+	priv->dma.config.dst_inc = DWAXIDMAC_CH_CTL_L_INC;
+	priv->dma.config.chan_block_ts = size;
+	priv->dma.config.src_burst = DWAXIDMAC_BURST_TRANS_LEN_1;
+	priv->dma.config.dst_burst = DWAXIDMAC_BURST_TRANS_LEN_1;
+	priv->dma.config.src_addr = (unsigned long)priv->flash_base;
+	priv->dma.config.dst_addr = (unsigned long)dest;
+	priv->dma.config.src_hs_sel = DWAXIDMAC_HS_SEL_HW;
+	priv->dma.config.dst_hs_sel = DWAXIDMAC_HS_SEL_SW;
+	dma_enable(&priv->dma);
 }
 
 
 /**
  * @brief spi send command
  */
-static void spi_command_cfg(struct es_spi_priv *priv, u32 code, u32 type)
+static void spi_command_cfg(struct es_spi_priv *priv, u32 code, u32 type, u32 dma)
 {
-    u32 command = es_read(priv, ES_SPI_CSR_06);
+	if(dma == SPI_COMMAND_MOVE_DMA)
+		es_write(priv, ES_SPI_CSR_07, 0x4);
+	else
+		es_write(priv, ES_SPI_CSR_07, 0x0);
 
-	command &= ~((0xFF << 6) | (0x1 << 5) | (0xF << 1) | 0x1);
-    // command &= SPI_COMMAND_INIT_VALUE;
-    command |= ((code << SPI_COMMAND_CODE_FIELD_POSITION) |
-                (SPI_COMMAND_MOVE_VALUE << SPI_COMMAND_MOVE_FIELD_POSITION) |
+    u32 command = ((code << SPI_COMMAND_CODE_FIELD_POSITION) |
+                (dma << SPI_COMMAND_MOVE_FIELD_POSITION) |
                 (type << SPI_COMMAND_TYPE_FIELD_POSITION) | SPI_COMMAND_VALID);
-
     es_write(priv, ES_SPI_CSR_06, command);
-	// printk("ES_SPI_CSR_06 command %x, read command %x\n",command, es_read(priv, ES_SPI_CSR_06));
 }
-#define SPI_PAGE_MASK                0XFF
+
+int wait_dma_irq(struct es_spi_priv *priv)
+{
+	u64 chan_status = 0;
+	u64 dma_status = 0;
+	while(1)
+	{	dma_status = axi_dma_get_irq_state(&priv->dma);
+		if( dma_status && 1u << priv->dma.chan_id) {
+			chan_status = axi_chan_get_irq_state(&priv->dma);
+			if (chan_status & (0x1  <<  0)) {
+				axi_chan_irq_clear(&priv->dma, chan_status);
+				axi_chan_disable(&priv->dma);
+				axi_chan_irq_disable(&priv->dma, DWAXIDMAC_IRQ_ALL);
+				break;
+			}
+			axi_chan_irq_clear(&priv->dma, chan_status);
+		}
+	}
+	return 0;
+}
+int wait_spi_irq(struct es_spi_priv *priv)
+{
+	while(!(es_read(priv, ES_SPI_CSR_07) & 0x1));
+	es_write(priv, ES_SPI_CSR_07, 0x2);
+	return 0;
+}
+
+
 /**
  * @brief  spi write flash
  * @param [in]  offset: address of flash to be write
@@ -576,31 +1100,38 @@ void es_writer(struct es_spi_priv *priv)
 	cmd_code = priv->opcode;
 	u32 cmd_type = priv->cmd_type;
 	u8 *wr_dest = (u8 *)(priv->tx);
+	u8 *buf = memalign(64, FLASH_PAGE_SIZE);
 	int size = priv->len;
+	// printf("%s %d cmd_code %x cmd_type %x\r\n",__func__,__LINE__,cmd_code,cmd_type);
 	if (size == 0)
 	{
 		// if(SPIC_CMD_TYPE_SECTOR_ERASE == cmd_type)
 		{
 			spi_read_write_cfg(priv, write_size, (uintptr_t)offset);
-			spi_command_cfg(priv, cmd_code, cmd_type);
+			spi_command_cfg(priv, cmd_code, cmd_type, SPI_COMMAND_MOVE_VALUE);
 			spi_wait_over(priv);
 		}
 	}
 	while (size > 0) {
 		write_size = size;
-
 		if (write_size > FLASH_PAGE_SIZE) {
 			write_size = FLASH_PAGE_SIZE;
 		}
+		memset(buf, 0, write_size);
+		memcpy(buf, wr_dest, write_size);
+		flush_cache((unsigned long)buf, write_size);
 
 		spi_read_write_cfg(priv, write_size, offset);
-		spi_send_data(priv, (u32 *)wr_dest, write_size);
-		spi_command_cfg(priv, cmd_code, cmd_type);
-		spi_wait_over(priv);
+		spi_send_data(priv, (u32 *)buf, write_size);
+		spi_command_cfg(priv, cmd_code, cmd_type, SPI_COMMAND_MOVE_DMA);
+		wait_spi_irq(priv);
+		wait_dma_irq(priv);
+
 		wr_dest += write_size;
 		offset += write_size;
 		size = size - write_size;
 	}
+	free(buf);
 }
 
 
@@ -612,23 +1143,27 @@ static void es_reader(struct es_spi_priv *priv)
 	u32 cmd_type = priv->cmd_type;
 	u8 *mem_dest = priv->rx;
 	int size = priv->len;
-
-
+	u8 *buf = memalign(64, FLASH_PAGE_SIZE);
+	memset(mem_dest, 0, size);
 	while (size > 0) {
 		read_size = size;
 		if (read_size > FLASH_PAGE_SIZE) {
 			read_size = FLASH_PAGE_SIZE;
 		}
-
+		memset(buf, 0, read_size);
+		flush_cache(buf,read_size);
 		spi_read_write_cfg(priv, read_size, offset);
-
-		spi_command_cfg(priv, cmd_code, cmd_type);
+		spi_command_cfg(priv, cmd_code, cmd_type, SPI_COMMAND_MOVE_VALUE);
 		spi_wait_over(priv);
-		spi_recv_data(priv, (u32 *)mem_dest, read_size);
+		spi_recv_data(priv, (u32 *)buf, read_size);
+		wait_dma_irq(priv);
+
+		memcpy(mem_dest, buf, read_size);
 		mem_dest += read_size;
 		offset += read_size;
 		size = size - read_size;
 	}
+	free(buf);
 }
 
 static int poll_transfer(struct es_spi_priv *priv)
@@ -706,61 +1241,40 @@ static int es_spi_xfer(struct udevice *dev, unsigned int bitlen,
 
 uint8_t es_read_flash_status_register(struct es_spi_priv *priv, uint8_t *register_data, int flash_cmd)
 {
-	u32 command;
-
 	memset(register_data, 0, sizeof(uint8_t));
 	//Flash status register-2 is 1byte
 	spi_read_write_cfg(priv, 1, 0);
-
 	//Set SPI_FLASH_COMMAND
-	command = es_read(priv, ES_SPI_CSR_06);
-	command &= ~((0xFF << 6) | (0x1 << 5) | (0xF << 1) | 0x1);
-	command |= ((flash_cmd << SPI_COMMAND_CODE_FIELD_POSITION) |
-			(SPI_COMMAND_MOVE_VALUE << SPI_COMMAND_MOVE_FIELD_POSITION) |
-			(SPIC_CMD_TYPE_READ_STATUS_REGISTER << SPI_COMMAND_TYPE_FIELD_POSITION) | SPI_COMMAND_VALID);
-	es_write(priv, ES_SPI_CSR_06, command);
-
-	mdelay(10);
-
+	spi_command_cfg(priv, flash_cmd, SPIC_CMD_TYPE_READ_STATUS_REGISTER, SPI_COMMAND_MOVE_VALUE);
+	spi_wait_over(priv);
 	//Read back data
 	spi_recv_data(priv, (u32 *)register_data, 1);
+	wait_dma_irq(priv);
 	//printf("[%s %d]: command 0x%x, status register_data 0x%x\n",__func__,__LINE__, command, *register_data);
 	return 0;
 }
 
-void es_write_flash_status_register(struct es_spi_priv *priv, uint8_t register_data, int flash_cmd)
+void es_write_flash_status_register(struct es_spi_priv *priv, uint32_t register_data, int flash_cmd)
 {
-	u32 command;
-
 	//Flash status register-2 is 1byte
 	spi_read_write_cfg(priv, 1, 0);
 	spi_send_data(priv, (u32 *)&register_data, 1);
 
-	command = es_read(priv, ES_SPI_CSR_06);
-	command &= ~((0xFF << 6) | (0x1 << 5) | (0xF << 1) | 0x1);
-	command |= ((flash_cmd << SPI_COMMAND_CODE_FIELD_POSITION) |
-			(SPI_COMMAND_MOVE_VALUE << SPI_COMMAND_MOVE_FIELD_POSITION) |
-			(SPIC_CMD_TYPE_WRITE_STATUS_REGISTER << SPI_COMMAND_TYPE_FIELD_POSITION) | SPI_COMMAND_VALID);
-	es_write(priv, ES_SPI_CSR_06, command);
-
+	spi_command_cfg(priv, flash_cmd, SPIC_CMD_TYPE_WRITE_STATUS_REGISTER, SPI_COMMAND_MOVE_DMA);
 	//Wait command finish
-	spi_wait_over(priv);
+	wait_dma_irq(priv);
+	wait_spi_irq(priv);
+
 	//printf("[%s %d]: command 0x%x, status register_data 0x%x\n",__func__,__LINE__, command, register_data);
 }
 
 void es_write_flash_global_block_lock_register(struct es_spi_priv *priv, int flash_cmd)
 {
-	u32 command;
 
 	//Flash global block lock register not need data
 	spi_read_write_cfg(priv, 1, 0);
 
-	command = es_read(priv, ES_SPI_CSR_06);
-	command &= ~((0xFF << 6) | (0x1 << 5) | (0xF << 1) | 0x1);
-	command |= ((flash_cmd << SPI_COMMAND_CODE_FIELD_POSITION) |
-			(SPI_COMMAND_MOVE_VALUE << SPI_COMMAND_MOVE_FIELD_POSITION) |
-			(SPIC_CMD_TYPE_CHIP_ERASE << SPI_COMMAND_TYPE_FIELD_POSITION) | SPI_COMMAND_VALID);
-	es_write(priv, ES_SPI_CSR_06, command);
+	spi_command_cfg(priv, flash_cmd, SPIC_CMD_TYPE_CHIP_ERASE, SPI_COMMAND_MOVE_VALUE);
 
 	//Wait command finish
 	spi_wait_over(priv);
@@ -769,13 +1283,13 @@ void es_write_flash_global_block_lock_register(struct es_spi_priv *priv, int fla
 
 void es_flash_global_wp_cfg(int enable)
 {
-	uint8_t register_data, request_register_data;
+	uint32_t register_data, request_register_data;
 	struct es_spi_priv *priv = &g_priv;
 
 	es_external_cs_manage(priv, false);
 
 	//Update status register1
-	es_read_flash_status_register(priv, &register_data, SPINOR_OP_RDSR);
+	es_read_flash_status_register(priv, (uint8_t *)&register_data, SPINOR_OP_RDSR);
 	request_register_data = register_data;
 		/*
 			  SRP SEC TB BP2 BP1 BP0 WEL BUSY
@@ -809,18 +1323,11 @@ void es_flash_global_wp_cfg(int enable)
 
 void es_write_flash_individual_block_lock_register(void *addr, int flash_cmd)
 {
-	u32 command;
 	struct es_spi_priv *priv = &g_priv;
 
 	spi_read_write_cfg(priv, 3, (uintptr_t)addr);
 
-	command = es_read(priv, ES_SPI_CSR_06);
-	command &= ~((0xFF << 6) | (0x1 << 5) | (0xF << 1) | 0x1);
-	command |= ((flash_cmd << SPI_COMMAND_CODE_FIELD_POSITION) |
-			(SPI_COMMAND_MOVE_VALUE << SPI_COMMAND_MOVE_FIELD_POSITION) |
-			(SPIC_CMD_TYPE_BLOCK_ERASE_TYPE2 << SPI_COMMAND_TYPE_FIELD_POSITION) | SPI_COMMAND_VALID);
-
-	es_write(priv, ES_SPI_CSR_06, command);
+	spi_command_cfg(priv, flash_cmd, SPIC_CMD_TYPE_BLOCK_ERASE_TYPE2, SPI_COMMAND_MOVE_VALUE);
 
 	//Wait command finish
 	spi_wait_over(priv);
@@ -1001,12 +1508,12 @@ static int es_spi_exec_op(struct spi_slave *slave, const struct spi_mem_op *op)
 		priv->rx = op->data.buf.in;
 
 		priv->len = op->data.nbytes;
-		//dev_err(bus, "read len = %u\n", op->data.nbytes);
+		// dev_err(bus, "read len = %u\n", op->data.nbytes);
 		es_reader(priv);
 	} else {
 		priv->tx = op->data.buf.out;
 		priv->len = op->data.nbytes;
-		//dev_err(bus, "write len = 0x%x  tx_addr %x\n", op->data.nbytes,priv->tx);
+		// dev_err(bus, "write len = 0x%x  tx_addr %x\n", op->data.nbytes, priv->tx);
 		/* Fill up the write fifo before starting the transfer */
 		es_writer(priv);
 

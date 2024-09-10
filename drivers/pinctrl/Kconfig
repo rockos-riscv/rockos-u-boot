@@ -342,8 +342,8 @@ config PINCTRL_ZYNQMP
 	  Generic Pinctrl framework and is compatible with the Linux driver,
 	  i.e. it uses the same device tree configuration.
 
-config PINCTRL_EIC7700
-	bool "Eswin EIC7700 pin control driver"
+config PINCTRL_EIC770X
+	bool "Eswin EIC770X pin control driver"
 	depends on DM && PINCTRL_GENERIC && EIC770X_RISCV
 	default y
 	help

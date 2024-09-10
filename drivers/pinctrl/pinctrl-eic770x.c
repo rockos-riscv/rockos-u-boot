@@ -1269,7 +1269,7 @@ static int eswin_pinctrl_probe(struct udevice *dev)
 
 
 static const struct udevice_id eswin_pinctrl_of_match[] = {
-	{.compatible = "eswin,eic7700-pinctrl"},
+	{.compatible = "eswin,eic770x-pinctrl"},
 	{ /* sentinel */ }
 };
 

@@ -105,12 +105,11 @@ static int get_hardware_board_info(const char *node_name, HardwareBoardInfo_t *g
 int hardware_info_env_set(void)
 {
 	uint8_t mac_addr[6];
-	const char *node_name_d0 = "spi@51800000";
-	const char *node_name_d1 = "spi@71800000";
+	const char *node_name = "spi@51800000";
 	HardwareBoardInfo_t gHardware_Board_Info;
 	uint64_t size = sizeof(HardwareBoardInfo_t);
 	memset((uint8_t *)&gHardware_Board_Info, 0, size);
-	if(get_hardware_board_info(node_name_d0, &gHardware_Board_Info)) {
+	if(get_hardware_board_info(node_name, &gHardware_Board_Info)) {
 		return 0;
 	}
 	memset(mac_addr, 0, 6);
@@ -132,19 +131,6 @@ int hardware_info_env_set(void)
 	}
 	else if(strstr(boardSerialNumber, "EIDS200B516")) {
 		env_set("fdtfile","eswin/eic7700-evb-a2.dtb");
-	}
-
-	memset((uint8_t *)&gHardware_Board_Info, 0, size);
-	if(get_hardware_board_info(node_name_d1, &gHardware_Board_Info)) {
-		return 0;
-	}
-	memset(mac_addr, 0, 6);
-	if (!eth_env_get_enetaddr("eth2addr", mac_addr) && is_valid_ethaddr(gHardware_Board_Info.ethernetMAC1)) {
-		eth_env_set_enetaddr("eth2addr", gHardware_Board_Info.ethernetMAC1);
-	}
-	memset(mac_addr, 0, 6);
-	if (!eth_env_get_enetaddr("eth3addr", mac_addr) && is_valid_ethaddr(gHardware_Board_Info.ethernetMAC2)) {
-		eth_env_set_enetaddr("eth3addr", gHardware_Board_Info.ethernetMAC2);
 	}
 	return 0;
 }

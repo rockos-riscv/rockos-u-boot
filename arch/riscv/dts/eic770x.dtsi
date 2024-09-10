@@ -23,7 +23,7 @@
 #define RTCCLK_FREQ             1000000
 
 /dts-v1/;
-#include "eic7700-pinctrl.dtsi"
+#include "eic770x-pinctrl.dtsi"
 #define USB_CLASS_HUB	 9
 / {
 	#address-cells = <2>;
@@ -762,9 +762,8 @@
 			spi-max-frequency = <4800000>;
 			num-cs = <1>;
 			reg-io-width = <4>;
-
 		};
-		bootspi_d1: spi@71800000 {
+		d1_bootspi: spi@71800000 {
 			status = "disabled";
 			compatible = "eswin,es-apb-spi-1.0";
 			reg = <0x0 0x71800000 0x0 0x8000>;
@@ -777,11 +776,10 @@
 			chip-erase-time = <40>;
 			#address-cells = <1>;
 			#size-cells = <0>;
-			clocks = <&cru EIC7X_CLK_CLK_BOOTSPI>;
+			clocks = <&d1_cru EIC7X_CLK_CLK_BOOTSPI>;
 			spi-max-frequency = <4800000>;
 			num-cs = <1>;
 			reg-io-width = <4>;
-
 		};
 
 		mipi_dsi: dsi@50270000 {
@@ -958,7 +956,7 @@
 			#size-cells = <0>;
 			compatible = "eswin,gpio-bank";
 			reg = <0x0 0x51600000 0x0 0x80>;
-			status = "okay";
+			status = "disabled";
 
 			porta: gpio-port@0 {
 				compatible = "eswin,gpio-bank";
@@ -993,6 +991,45 @@
 			};
 		};
 
+		d1_gpio: gpio@71600000 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			compatible = "eswin,gpio-bank";
+			reg = <0x0 0x71600000 0x0 0x80>;
+			status = "disabled";
+
+			d_1porta: gpio-port@0 {
+				compatible = "eswin,gpio-bank";
+				gpio-controller;
+				#gpio-cells = <2>;
+				ngpios = <32>;
+				reg = <0>;
+			};
+
+			d1_portb: gpio-port@1 {
+				compatible = "eswin,gpio-bank";
+				gpio-controller;
+				#gpio-cells = <2>;
+				ngpios = <32>;
+				reg = <1>;
+			};
+
+			d1_portc: gpio-port@2 {
+				compatible = "eswin,gpio-bank";
+				gpio-controller;
+				#gpio-cells = <2>;
+				ngpios = <32>;
+				reg = <2>;
+			};
+
+			d1_portd: gpio-port@3 {
+				compatible = "eswin,gpio-bank";
+				gpio-controller;
+				#gpio-cells = <2>;
+				ngpios = <16>;
+				reg = <3>;
+			};
+		};
 	};
 
 	pmu {
