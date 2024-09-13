@@ -524,11 +524,11 @@ int dma_enable(struct dw_axi_dma *dw)
 
 	axi_chan_iowrite32(dw, CH_CTL_H, 0x1 << 26);
 
-	// irq_mask = DWAXIDMAC_IRQ_ALL;
-	irq_mask = DWAXIDMAC_IRQ_DMA_TRF | DWAXIDMAC_IRQ_ALL_ERR | DWAXIDMAC_IRQ_BLOCK_TRF; // | DWAXIDMAC_IRQ_SRC_TRAN | DWAXIDMAC_IRQ_DST_TRAN;
+	irq_mask = DWAXIDMAC_IRQ_NONE;
 	axi_chan_irq_sig_set(dw, irq_mask);
 
 	/* Generate 'suspend' status but don't generate interrupt */
+	irq_mask = DWAXIDMAC_IRQ_DMA_TRF | DWAXIDMAC_IRQ_ALL_ERR | DWAXIDMAC_IRQ_BLOCK_TRF; // | DWAXIDMAC_IRQ_SRC_TRAN | DWAXIDMAC_IRQ_DST_TRAN;
 	axi_chan_irq_set(dw, irq_mask);
 
 	axi_chan_enable(dw);
@@ -764,7 +764,7 @@ static int spi_wait_over(struct es_spi_priv *priv)
 	while(es_read(priv, ES_SPI_CSR_06) & 0x1);
 	//check flash status register' busy bit to make sure operation is finish.
 	while (register_data & 0x1) {
-		es_read_flash_status_register(priv, &register_data, SPINOR_OP_RDSR);
+		es_read_flash_status_register(priv, (uint8_t *)&register_data, SPINOR_OP_RDSR);
 	}
 	return 0;
 }
@@ -1062,19 +1062,15 @@ static void spi_command_cfg(struct es_spi_priv *priv, u32 code, u32 type, u32 dm
 int wait_dma_irq(struct es_spi_priv *priv)
 {
 	u64 chan_status = 0;
-	u64 dma_status = 0;
-	while(1)
-	{	dma_status = axi_dma_get_irq_state(&priv->dma);
-		if( dma_status && 1u << priv->dma.chan_id) {
-			chan_status = axi_chan_get_irq_state(&priv->dma);
-			if (chan_status & (0x1  <<  0)) {
-				axi_chan_irq_clear(&priv->dma, chan_status);
-				axi_chan_disable(&priv->dma);
-				axi_chan_irq_disable(&priv->dma, DWAXIDMAC_IRQ_ALL);
-				break;
-			}
+	while(1){
+		chan_status = axi_chan_get_irq_state(&priv->dma);
+		if (chan_status & (0x1  <<  0)) {
 			axi_chan_irq_clear(&priv->dma, chan_status);
+			axi_chan_disable(&priv->dma);
+			axi_chan_irq_disable(&priv->dma, DWAXIDMAC_IRQ_ALL);
+			break;
 		}
+		axi_chan_irq_clear(&priv->dma, chan_status);
 	}
 	return 0;
 }
@@ -1151,7 +1147,7 @@ static void es_reader(struct es_spi_priv *priv)
 			read_size = FLASH_PAGE_SIZE;
 		}
 		memset(buf, 0, read_size);
-		flush_cache(buf,read_size);
+		flush_cache((unsigned long)buf,read_size);
 		spi_read_write_cfg(priv, read_size, offset);
 		spi_command_cfg(priv, cmd_code, cmd_type, SPI_COMMAND_MOVE_VALUE);
 		spi_wait_over(priv);
@@ -1302,7 +1298,7 @@ void es_flash_global_wp_cfg(int enable)
 	}
 
 	//Update status register3
-	es_read_flash_status_register(priv, &register_data, SPINOR_OP_RDSR3);
+	es_read_flash_status_register(priv, (uint8_t *)&register_data, SPINOR_OP_RDSR3);
 	request_register_data = register_data;
 		/*
 			  R DRV1 DRV0 R R WPS R R
