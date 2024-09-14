@@ -222,7 +222,7 @@ int set_voltage_default(void)
 	ofnode node;
 	struct udevice *pinctrl;
 	struct gpio_desc desc;
-	int ret = 0;
+
 	node = ofnode_path("/config");
 	if (!ofnode_valid(node)) {
 		pr_err("Can't find /config node!\n");
