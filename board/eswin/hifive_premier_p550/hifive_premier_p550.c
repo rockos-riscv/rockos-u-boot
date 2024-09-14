@@ -35,8 +35,9 @@
 #include <spi.h>
 #include <spi_flash.h>
 #include <init.h>
-#include <dm/device-internal.h>
 #include <asm/gpio.h>
+#include <dm/device-internal.h>
+#include <dm/pinctrl.h>
 #ifdef CONFIG_ESWIN_UMBOX
 #include <eswin/eswin-umbox-srvc.h>
 #endif
