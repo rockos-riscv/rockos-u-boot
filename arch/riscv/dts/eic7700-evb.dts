@@ -334,3 +334,7 @@
 &gpio0 {
 	status = "okay";
 };
+
+&pinctrl {
+	status = "okay";
+};
