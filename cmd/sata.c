@@ -86,15 +86,8 @@ static int do_sata(struct cmd_tbl *cmdtp, int flag, int argc,
 		if (!strcmp(argv[1], "stop"))
 			return sata_remove(devnum);
 
-		if (!strcmp(argv[1], "init")) {
-			if (sata_curr_device != -1) {
-				rc = sata_remove(devnum);
-				if (rc)
-					return rc;
-			}
-
+		if (!strcmp(argv[1], "init"))
 			return sata_probe(devnum);
-		}
 	}
 
 	/* If the user has not yet run `sata init`, do it now */
