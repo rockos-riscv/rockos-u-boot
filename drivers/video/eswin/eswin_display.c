@@ -549,10 +549,8 @@ static int display_init(struct display_state *state)
 	 */
 	if (conn_funcs->detect) {
 		ret = conn_funcs->detect(state);
-		if (!ret) {
-			printf("[%s]conn_funcs->detect failed.\n", __FUNCTION__);
+		if (!ret)
 			goto deinit;
-		}
 	}
 
 	if (panel_state->panel) {
