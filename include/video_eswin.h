@@ -11,21 +11,21 @@
 #ifdef CONFIG_DRM_ESWIN_DW_HDMI
  #define DRM_ESWIN_FB_WIDTH             1920
  #define DRM_ESWIN_FB_HEIGHT            1080
- #define DRM_ESWIN_FB_BPP               VIDEO_BPP16
+ #define DRM_ESWIN_FB_BPP               VIDEO_BPP32
 #else
  #define DRM_ESWIN_FB_WIDTH             1080
  #define DRM_ESWIN_FB_HEIGHT            1920
- #define DRM_ESWIN_FB_BPP               VIDEO_BPP16
+ #define DRM_ESWIN_FB_BPP               VIDEO_BPP32
 #endif
 #else
 #ifdef CONFIG_DRM_ESWIN_DW_HDMI
  #define DRM_ESWIN_FB_WIDTH             1280
  #define DRM_ESWIN_FB_HEIGHT            720
- #define DRM_ESWIN_FB_BPP               VIDEO_BPP16
+ #define DRM_ESWIN_FB_BPP               VIDEO_BPP32
 #else
  #define DRM_ESWIN_FB_WIDTH             320
  #define DRM_ESWIN_FB_HEIGHT            480
- #define DRM_ESWIN_FB_BPP               VIDEO_BPP16
+ #define DRM_ESWIN_FB_BPP               VIDEO_BPP32
 #endif
 #endif
 
