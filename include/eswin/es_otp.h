@@ -79,5 +79,6 @@ extern s32 get_otp_value(u8 *data, s32 otp_id, u32 size, u8 enxor);
 extern s32 otp_init(void);
 extern s32 otp_pgmlock(void);
 extern s32 otp_read_status(void);
+extern int eswin_otp_read_bit(int bit_addr, uint8_t *bit_data);
 
 #endif /*__ES_OTP_H__*/

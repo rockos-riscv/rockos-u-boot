@@ -35,7 +35,7 @@
 #include <dm/device-internal.h>
 #include <u-boot/crc.h>
 #include <eic7700_common.h>
-
+#include <eswin/cpu.h>
 #ifdef CONFIG_ESWIN_UMBOX
 #include <eswin/eswin-umbox-srvc.h>
 #endif
@@ -171,6 +171,7 @@ int misc_init_r(void)
 		env_set("fdtfile","eswin/eic7700-evb-a2.dtb");
 	}
 	env_set_ulong("ram_size", (gd->ram_size / 1024 / 1024 / 1024));
+	eswin_update_bootargs();
 	return 0;
 }
 

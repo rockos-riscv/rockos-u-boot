@@ -50,7 +50,7 @@ typedef struct __OPT_DATA_ST {
 	uint8_t val[0];                /* reg vale hex */
 } OTP_DATA_T;
 
-static int eswin_otp_read_bit(int bit_addr, uint8_t *bit_data)
+int eswin_otp_read_bit(int bit_addr, uint8_t *bit_data)
 {
 	int byte_addr;
 	unsigned int mask;
