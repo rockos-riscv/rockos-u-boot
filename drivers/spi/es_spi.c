@@ -714,7 +714,6 @@ struct es_spi_priv {
 	s32 chip_erase_time;
 };
 
-struct es_spi_priv g_priv;
 uint8_t es_read_flash_status_register(struct es_spi_priv *priv, uint8_t *register_data, int flash_cmd);
 
 static inline u32 es_read(struct es_spi_priv *priv, u32 offset)
@@ -987,7 +986,6 @@ static int es_spi_probe(struct udevice *bus)
 		return PTR_ERR(priv->wp_gpio);
 	}
 
-	memcpy(&g_priv, priv, sizeof(struct es_spi_priv));
 	return 0;
 }
 
@@ -1235,177 +1233,6 @@ static int es_spi_xfer(struct udevice *dev, unsigned int bitlen,
 	return ret;
 }
 
-uint8_t es_read_flash_status_register(struct es_spi_priv *priv, uint8_t *register_data, int flash_cmd)
-{
-	memset(register_data, 0, sizeof(uint8_t));
-	//Flash status register-2 is 1byte
-	spi_read_write_cfg(priv, 1, 0);
-	//Set SPI_FLASH_COMMAND
-	spi_command_cfg(priv, flash_cmd, SPIC_CMD_TYPE_READ_STATUS_REGISTER, SPI_COMMAND_MOVE_VALUE);
-	spi_wait_over(priv);
-	//Read back data
-	spi_recv_data(priv, (u32 *)register_data, 1);
-	wait_dma_irq(priv);
-	//printf("[%s %d]: command 0x%x, status register_data 0x%x\n",__func__,__LINE__, command, *register_data);
-	return 0;
-}
-
-void es_write_flash_status_register(struct es_spi_priv *priv, uint32_t register_data, int flash_cmd)
-{
-	//Flash status register-2 is 1byte
-	spi_read_write_cfg(priv, 1, 0);
-	spi_send_data(priv, (u32 *)&register_data, 1);
-
-	spi_command_cfg(priv, flash_cmd, SPIC_CMD_TYPE_WRITE_STATUS_REGISTER, SPI_COMMAND_MOVE_DMA);
-	//Wait command finish
-	wait_dma_irq(priv);
-	wait_spi_irq(priv);
-
-	//printf("[%s %d]: command 0x%x, status register_data 0x%x\n",__func__,__LINE__, command, register_data);
-}
-
-void es_write_flash_global_block_lock_register(struct es_spi_priv *priv, int flash_cmd)
-{
-
-	//Flash global block lock register not need data
-	spi_read_write_cfg(priv, 1, 0);
-
-	spi_command_cfg(priv, flash_cmd, SPIC_CMD_TYPE_CHIP_ERASE, SPI_COMMAND_MOVE_VALUE);
-
-	//Wait command finish
-	spi_wait_over(priv);
-	//printf("[%s %d]: command 0x%x\n",__func__,__LINE__, command);
-}
-
-void es_flash_global_wp_cfg(int enable)
-{
-	uint32_t register_data, request_register_data;
-	struct es_spi_priv *priv = &g_priv;
-
-	es_external_cs_manage(priv, false);
-
-	//Update status register1
-	es_read_flash_status_register(priv, (uint8_t *)&register_data, SPINOR_OP_RDSR);
-	request_register_data = register_data;
-		/*
-			  SRP SEC TB BP2 BP1 BP0 WEL BUSY
-	 	*/
-	request_register_data |= (1 << 5);  //TB 1, bottom
-	//request_register_data &= ~(1 << 5);  //TB 0, top
-	request_register_data &= ~(1 << 6);  // SEC 0, 64K
-	if (request_register_data != register_data) {
-		es_write_flash_status_register(priv, request_register_data, SPINOR_OP_WRSR);
-	}
-
-	//Update status register3
-	es_read_flash_status_register(priv, (uint8_t *)&register_data, SPINOR_OP_RDSR3);
-	request_register_data = register_data;
-		/*
-			  R DRV1 DRV0 R R WPS R R
-	 	*/
-	request_register_data |= (1 << 2);   //WPS 1, individual block
-	if (request_register_data != register_data) {
-		es_write_flash_status_register(priv, request_register_data, SPINOR_OP_WRSR3);
-	}
-
-	//Update global lock/unlock register
-	if (enable) {
-		es_write_flash_global_block_lock_register(priv, SPINOR_GLOBAL_BLOCK_LOCK);
-	} else {
-		es_write_flash_global_block_lock_register(priv, SPINOR_GLOBAL_BLOCK_UNLOCK);
-	}
-	es_external_cs_manage(priv, true);
-}
-
-void es_write_flash_individual_block_lock_register(void *addr, int flash_cmd)
-{
-	struct es_spi_priv *priv = &g_priv;
-
-	spi_read_write_cfg(priv, 3, (uintptr_t)addr);
-
-	spi_command_cfg(priv, flash_cmd, SPIC_CMD_TYPE_BLOCK_ERASE_TYPE2, SPI_COMMAND_MOVE_VALUE);
-
-	//Wait command finish
-	spi_wait_over(priv);
-
-	//printf("[%s %d]: command 0x%x, addr 0x%px, flash_cmd 0x%x\n",__func__,__LINE__,
-	//	command, addr, flash_cmd);
-}
-
-#define ALIGNMENT_SIZE 0x10000    // 64KB alignment
-int es_flash_region_wp_cfg(void *addr, int size, bool lock)
-{
-	uint32_t i;
-	int flash_cmd;
-	struct es_spi_priv *priv = &g_priv;
-
-	// Check if the address is 64KB aligned
-	if ((uintptr_t)addr % ALIGNMENT_SIZE != 0) {
-		printf("error: addr 0x%px is not aligned to 64KB\n", addr);
-		return -1;
-	}
-
-	// Check if the size is 64KB aligned
-	if (size % ALIGNMENT_SIZE != 0) {
-		printf("error: size 0x%d is not aligned to 64KB\n", size);
-		return -2;
-	}
-
-	flash_cmd = lock ? SPINOR_BLOCK_LOCK : SPINOR_BLOCK_UNLOCK;
-
-	es_external_cs_manage(priv, false);
-
-	for (i = 0; i < size; i += ALIGNMENT_SIZE) {
-		es_write_flash_individual_block_lock_register(addr + i, flash_cmd);
-	}
-
-	es_external_cs_manage(priv, true);
-	return 0;
-}
-
-/*
-	0: disable write_protection
-	1: enable write_protection
-*/
-extern void gpio_force(int num, int inout);
-extern void gpio_level_cfg(int index, int level);
-void es_bootspi_wp_cfg(int enable)
-{
-	struct es_spi_priv *priv = &g_priv;
-
-	if (enable) {
-		es_flash_global_wp_cfg(enable);
-		dm_gpio_set_value(priv->wp_gpio, enable); //gpio output low, enable protection
-		priv->wp_enabled = 1;
-	} else {
-		dm_gpio_set_value(priv->wp_gpio, enable); //gpio output high, disable protection
-		es_flash_global_wp_cfg(enable);
-		priv->wp_enabled = 0;
-	}
-	printf("Bootspi flash write protection %s\n", enable ? "enabled" : "disabled");
-}
-
-int es_bootspi_write_protection_init(void)
-{
-	int ret;
-
-	unsigned int bus = CONFIG_SF_DEFAULT_BUS;
-	unsigned int cs = CONFIG_SF_DEFAULT_CS;
-	/* In DM mode, defaults speed and mode will be taken from DT */
-	struct udevice *new;
-
-	ret = spi_flash_probe_bus_cs(bus, cs, &new);
-	if (ret) {
-		printf("Failed to initialize SPI flash at %u:%u (error %d)\n",
-			bus, cs, ret);
-		return -1;
-	}
-	dev_get_uclass_priv(new);
-
-	es_bootspi_wp_cfg(1);
-	return 0;
-}
-
 static int es_spi_exec_op(struct spi_slave *slave, const struct spi_mem_op *op)
 {
 	bool read = op->data.dir == SPI_MEM_DATA_IN;
@@ -1612,31 +1439,244 @@ U_BOOT_DRIVER(es_spi) = {
 	.remove = es_spi_remove,
 };
 
-static int do_bootspi_wp_cfg(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
+
+
+uint8_t es_read_flash_status_register(struct es_spi_priv *priv, uint8_t *register_data, int flash_cmd)
 {
-	if (argc != 2) {
-		printf("Usage: bootspi_wp <0|1>\n");
-		return CMD_RET_USAGE;
+	u8 *buf = memalign(64, sizeof(uint32_t));
+	memset(register_data, 0, sizeof(uint32_t));
+	memset(buf, 0, sizeof(uint32_t));
+	flush_cache((unsigned long)buf, sizeof(uint32_t));
+
+	//Flash status register-2 is 1byte
+	spi_read_write_cfg(priv, 1, 0);
+	//Set SPI_FLASH_COMMAND
+	spi_command_cfg(priv, flash_cmd, SPIC_CMD_TYPE_READ_STATUS_REGISTER, SPI_COMMAND_MOVE_VALUE);
+	spi_wait_over(priv);
+	//Read back data
+	spi_recv_data(priv, (u32 *)buf, 1);
+	wait_dma_irq(priv);
+
+	memcpy(register_data, buf, sizeof(uint32_t));
+	// printf("[%s %d]: command 0x%x, status register_data 0x%x\n",__func__,__LINE__, flash_cmd, *register_data);
+	free(buf);
+	return 0;
+}
+
+void es_write_flash_status_register(struct es_spi_priv *priv, uint32_t register_data, int flash_cmd)
+{
+	u8 *buf = memalign(64, sizeof(uint32_t));
+	memset(buf, 0, sizeof(uint32_t));
+	memcpy(buf, &register_data, sizeof(uint32_t));
+	flush_cache((unsigned long)buf, sizeof(uint32_t));
+
+	//Flash status register-2 is 1byte
+	spi_read_write_cfg(priv, 1, 0);
+	spi_send_data(priv, (u32 *)buf, 1);
+
+	spi_command_cfg(priv, flash_cmd, SPIC_CMD_TYPE_WRITE_STATUS_REGISTER, SPI_COMMAND_MOVE_DMA);
+	//Wait command finish
+	wait_dma_irq(priv);
+	wait_spi_irq(priv);
+	free(buf);
+	// printf("[%s %d]: command 0x%x, status register_data 0x%x\n",__func__,__LINE__, flash_cmd, register_data);
+}
+
+void es_write_flash_global_block_lock_register(struct es_spi_priv *priv, int flash_cmd)
+{
+
+	//Flash global block lock register not need data
+	spi_read_write_cfg(priv, 1, 0);
+
+	spi_command_cfg(priv, flash_cmd, SPIC_CMD_TYPE_CHIP_ERASE, SPI_COMMAND_MOVE_VALUE);
+
+	//Wait command finish
+	spi_wait_over(priv);
+	//printf("[%s %d]: command 0x%x\n",__func__,__LINE__, command);
+}
+
+void es_flash_global_wp_cfg(struct es_spi_priv *priv, int enable)
+{
+	uint32_t register_data, request_register_data;
+
+	es_external_cs_manage(priv, false);
+
+	//Update status register1
+	es_read_flash_status_register(priv, (uint8_t *)&register_data, SPINOR_OP_RDSR);
+	request_register_data = register_data;
+		/*
+			  SRP SEC TB BP2 BP1 BP0 WEL BUSY
+	 	*/
+	request_register_data |= (1 << 5);  //TB 1, bottom
+	//request_register_data &= ~(1 << 5);  //TB 0, top
+	request_register_data &= ~(1 << 6);  // SEC 0, 64K
+	if (request_register_data != register_data) {
+		es_write_flash_status_register(priv, request_register_data, SPINOR_OP_WRSR);
 	}
 
-	int enable = simple_strtoul(argv[1], NULL, 10);
+	//Update status register3
+	es_read_flash_status_register(priv, (uint8_t *)&register_data, SPINOR_OP_RDSR3);
+	request_register_data = register_data;
+		/*
+			  R DRV1 DRV0 R R WPS R R
+	 	*/
+	request_register_data |= (1 << 2);   //WPS 1, individual block
+	if (request_register_data != register_data) {
+		es_write_flash_status_register(priv, request_register_data, SPINOR_OP_WRSR3);
+	}
 
+	//Update global lock/unlock register
+	if (enable) {
+		es_write_flash_global_block_lock_register(priv, SPINOR_GLOBAL_BLOCK_LOCK);
+	} else {
+		es_write_flash_global_block_lock_register(priv, SPINOR_GLOBAL_BLOCK_UNLOCK);
+	}
+	es_external_cs_manage(priv, true);
+}
+
+void es_write_flash_individual_block_lock_register(struct es_spi_priv *priv, void *addr, int flash_cmd)
+{
+	spi_read_write_cfg(priv, 3, (uintptr_t)addr);
+
+	spi_command_cfg(priv, flash_cmd, SPIC_CMD_TYPE_BLOCK_ERASE_TYPE2, SPI_COMMAND_MOVE_VALUE);
+
+	//Wait command finish
+	spi_wait_over(priv);
+
+	//printf("[%s %d]: command 0x%x, addr 0x%px, flash_cmd 0x%x\n",__func__,__LINE__,
+	//	command, addr, flash_cmd);
+}
+
+#define ALIGNMENT_SIZE 0x10000    // 64KB alignment
+int es_flash_region_wp_cfg(struct spi_flash *flash, void *addr, int size, bool lock)
+{
+	uint32_t i;
+	int flash_cmd;
+	struct udevice *dev = flash->spi->dev->parent;
+	struct es_spi_priv *priv = dev_get_priv(dev);
+
+	if((uintptr_t)0x51800000 != priv->regs && (uintptr_t)0x71800000 != priv->regs)
+		return -3;
+	// Check if the address is 64KB aligned
+	if ((uintptr_t)addr % ALIGNMENT_SIZE != 0) {
+		printf("error: addr 0x%px is not aligned to 64KB\n", addr);
+		return -1;
+	}
+
+	// Check if the size is 64KB aligned
+	if (size % ALIGNMENT_SIZE != 0) {
+		printf("error: size 0x%d is not aligned to 64KB\n", size);
+		return -2;
+	}
+
+	flash_cmd = lock ? SPINOR_BLOCK_LOCK : SPINOR_BLOCK_UNLOCK;
+
+	es_external_cs_manage(priv, false);
+
+	for (i = 0; i < size; i += ALIGNMENT_SIZE) {
+		es_write_flash_individual_block_lock_register(priv, addr + i, flash_cmd);
+	}
+
+	es_external_cs_manage(priv, true);
+	return 0;
+}
+
+/*
+	0: disable write_protection
+	1: enable write_protection
+*/
+extern void gpio_force(int num, int inout);
+extern void gpio_level_cfg(int index, int level);
+void es_bootspi_wp_cfg(struct spi_flash *flash, int enable)
+{
+	struct udevice *dev = flash->spi->dev->parent;
+	struct es_spi_priv *priv = dev_get_priv(dev);
+	if((uintptr_t)0x51800000 != priv->regs && (uintptr_t)0x71800000 != priv->regs)
+		return -1;
+
+	if (enable) {
+		es_flash_global_wp_cfg(priv, enable);
+		dm_gpio_set_value(priv->wp_gpio, enable); //gpio output low, enable protection
+		priv->wp_enabled = 1;
+	} else {
+		dm_gpio_set_value(priv->wp_gpio, enable); //gpio output high, disable protection
+		es_flash_global_wp_cfg(priv, enable);
+		priv->wp_enabled = 0;
+	}
+
+	printf("Bootspi flash write protection %s\n", enable ? "enabled" : "disabled");
+}
+
+
+struct spi_flash *boot_flash = NULL;
+int bootspi_probe(char *node_name)
+{
+	struct udevice *bus, *dev;
+	boot_flash = NULL;
+	int ret = uclass_get_device_by_name(UCLASS_SPI, node_name, &bus);
+	if(ret) {
+		return ret;
+	}
+	ret = spi_find_chip_select(bus, 0, &dev);
+	if(ret) {
+		printf("Invalid chip select :%d (err=%d)\n", 0, ret);
+		return ret;
+	}
+
+	if (!device_active(dev)) {
+		if(device_probe(dev))
+			return -1;
+	}
+	boot_flash = dev_get_uclass_priv(dev);
+
+	if (!boot_flash) {
+		printf("Failed to initialize SPI flash at %s (error %d)\n",
+		       node_name, ret);
+		return 1;
+	}
+	printf("Success to initialize SPI flash at %s\n",node_name);
+	return 0;
+}
+
+static int do_spi_flash_probe(int argc, char *const argv[])
+{
+	const char *node_name_d0 = "spi@51800000";
+	const char *node_name_d1 = "spi@71800000";
+	char *node_name = node_name_d0;
+	if (argc > 3) {
+		printf("Usage: bootspi probe <0|1>\n");
+		return CMD_RET_USAGE;
+	}
+	if (argc == 2) {
+		int dienum = simple_strtoul(argv[1], NULL, 10);
+		if (dienum != 0 && dienum != 1) {
+			printf("Invalid argument. Use 0 to select die0 bootspi flash and 1 to elect die1 bootspi flash.\n");
+			return CMD_RET_USAGE;
+		}
+		if(dienum) {
+			node_name = node_name_d1;
+		}
+	}
+	return bootspi_probe(node_name);
+}
+
+static int do_bootspi_wp_cfg(int argc, char * const argv[])
+{
+	if (argc == 1) {
+		printf("Usage: bootspi_wp <0|1> %x\n",argc);
+		return CMD_RET_USAGE;
+	}
+	int enable = simple_strtoul(argv[1], NULL, 10);
 	if (enable != 0 && enable != 1) {
 		printf("Invalid argument. Use 0 to disable and 1 to enable write protection.\n");
 		return CMD_RET_USAGE;
 	}
 
-	es_bootspi_wp_cfg(enable);
+	es_bootspi_wp_cfg(boot_flash, enable);
 	return CMD_RET_SUCCESS;
 }
 
-U_BOOT_CMD(
-	bootspi_wp, 2, 1, do_bootspi_wp_cfg,
-	"Enable or disable BootSPI write protection",
-	"<0|1> - 0 to disable, 1 to enable write protection"
-);
-
-static int do_spi_region_wp(struct cmd_tbl *cmdtp, int flag, int argc, char * const argv[])
+static int do_spi_region_wp(int argc, char * const argv[])
 {
 	if (argc != 4) {
 		printf("Usage: spi_region_wp <addr> <size> <enable>\n");
@@ -1647,7 +1687,7 @@ static int do_spi_region_wp(struct cmd_tbl *cmdtp, int flag, int argc, char * co
 	int size = simple_strtoul(argv[2], NULL, 16);
 	bool lock = simple_strtoul(argv[3], NULL, 16);
 
-	int ret = es_flash_region_wp_cfg(addr, size, lock);
+	int ret = es_flash_region_wp_cfg(boot_flash, addr, size, lock);
 	if (ret == 0) {
 		printf("SPI region 0x%px-0x%px write protection %s succeeded.\n",
 			addr, addr + size , lock ? "enable" : "disable");
@@ -1659,11 +1699,64 @@ static int do_spi_region_wp(struct cmd_tbl *cmdtp, int flag, int argc, char * co
 	return ret == 0 ? CMD_RET_SUCCESS : CMD_RET_FAILURE;
 }
 
-U_BOOT_CMD(
-	bootspi_region_wp, 4, 0, do_spi_region_wp,
-	"Enable/Disable write protection for boot spi flash region",
-	"<addr> <size> <lock>\n"
-	"    - addr: start address (hex, 64K aligned)\n"
-	"    - size: size in bytes (hex, 64K aligned)\n"
-	"    - enable: 1 to enable, 0 to disable\n"
+static int do_bootspi_flash(struct cmd_tbl *cmdtp, int flag, int argc,
+			char *const argv[])
+{
+	const char *cmd;
+	int ret;
+
+	/* need at least two arguments */
+	if (argc < 2)
+		return CMD_RET_USAGE;
+
+	cmd = argv[1];
+	--argc;
+	++argv;
+
+	if (strcmp(cmd, "probe") == 0)
+		return do_spi_flash_probe(argc, argv);
+
+	/* The remaining commands require a selected device */
+	if (!boot_flash) {
+		puts("No BOOTSPI flash selected. Please run `bootspi probe'\n");
+		return CMD_RET_FAILURE;
+	}
+	if (strcmp(cmd, "wp") == 0)
+		ret = do_bootspi_wp_cfg(argc, argv);
+	else if (strcmp(cmd, "region_wp") == 0)
+		ret = do_spi_region_wp(argc, argv);
+	else
+		ret = CMD_RET_USAGE;
+
+	return ret;
+}
+
+U_BOOT_LONGHELP(bootspi,
+	"probe [dienum]	- init flash device on given die bootspi number\n"
+	"bootspi wp <0|1>	- read `len' bytes starting at\n"
+	"					    Enable or disable BootSPI write protection\n"
+	"				    <0|1> - 0 to disable, 1 to enable write protection\n"
+	"bootspi region_wp addr size lock	Enable/Disable write protection for boot spi flash region\n"
+	"					- addr: start address (hex, 64K aligned)\n"
+	"					- size: size in bytes (hex, 64K aligned)\n"
+	"					- enable: 1 to enable, 0 to disable\n"
 );
+
+U_BOOT_CMD(
+	bootspi,	5,	1,	do_bootspi_flash,
+	"BOOTSPI flash sub-system", bootspi_help_text
+);
+
+int es_bootspi_write_protection_init(void)
+{
+	if(!bootspi_probe("spi@51800000")) {
+		es_bootspi_wp_cfg(boot_flash, 1);
+		boot_flash = NULL;
+	}
+
+	if(!bootspi_probe("spi@71800000")) {
+		es_bootspi_wp_cfg(boot_flash, 1);
+		boot_flash = NULL;
+	}
+	return 0;
+}

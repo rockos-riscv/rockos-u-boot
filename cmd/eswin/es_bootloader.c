@@ -285,10 +285,10 @@ static int norflash_write_bootchain(uint64_t src_addr, uint64_t offset, uint64_t
 
 	debug_printf("offset : %llx, size %llx\r\n",offset, size);
 
-	es_bootspi_wp_cfg(0);
+	es_bootspi_wp_cfg(flash, 0);
 	ret = es_spi_flash_erase(offset, size);
 	if(ret) {
-		es_bootspi_wp_cfg(1);
+		es_bootspi_wp_cfg(flash, 1);
 		return ret;
 	}
 
@@ -324,7 +324,7 @@ static int norflash_write_bootchain(uint64_t src_addr, uint64_t offset, uint64_t
 
 	printf("SF: 0x%lx bytes @ %#x Written: %s\r\n",
 		(size_t)size, (uint32_t)offset, ret?"ERROR":"OK");
-	es_bootspi_wp_cfg(1);
+	es_bootspi_wp_cfg(flash, 1);
 
 	return ret == 0 ? 0 : 1;
 }
