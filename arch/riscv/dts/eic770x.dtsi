@@ -604,7 +604,8 @@
 					snps,dis-enblslpm-quirk;
 					snps,phyif-utmi-bits = <16>;
 					snps,dis-u2-freeclk-exists-quirk;
-					snps,dis-u2-susphy-quirk;
+					snps,dis_u3_susphy_quirk;
+					snps,dis_u2_susphy_quirk;
 			};
 		};
 		usb1: usb1@50490000 {

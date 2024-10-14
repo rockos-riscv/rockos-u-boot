@@ -267,7 +267,7 @@
 &dwc3_typec0 {
 		status = "okay";
 		dr_mode = "peripheral";
-		maximum-speed = "high-speed";
+		maximum-speed = "super-speed";
 };
 &usb0 {
 	status = "okay";
