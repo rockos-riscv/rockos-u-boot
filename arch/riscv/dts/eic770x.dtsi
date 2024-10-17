@@ -914,11 +914,11 @@
 			// SBI_PMU_HW_CACHE_REFERENCES -> Instruction or Data cache/ITIM busy
 			<0x00003 0x00000000 0x1801>,
 			// SBI_PMU_HW_CACHE_MISSES -> Instruction or Data cache miss or MMIO access
-			<0x00004 0x00000000 0x0302>,
+			<0x00004 0x00000000 0x0202>,
 			// SBI_PMU_HW_BRANCH_INSTRUCTIONS -> Conditional branch retired
 			<0x00005 0x00000000 0x4000>,
 			// SBI_PMU_HW_BRANCH_MISSES -> Branch or jump misprediction
-			<0x00006 0x00000000 0x6001>,
+			<0x00006 0x00000000 0x2001>,
 			// L1D_READ_MISS -> Data cache miss or MMIO access
 			<0x10001 0x00000000 0x0202>,
 			// L1D_WRITE_ACCESS -> Data cache write-back
