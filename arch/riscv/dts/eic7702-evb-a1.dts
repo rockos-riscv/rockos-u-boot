@@ -206,7 +206,7 @@
 
 &sdhci_emmc {
 	status = "okay";
-	delay_code = <0x55>;
+	delay_code = <0x3c>;
 	drive-impedance-ohm = <50>;
 	enable-cmd-pullup;
 	enable-data-pullup;
