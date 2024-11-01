@@ -759,9 +759,14 @@ static int es_spi_dwc_init(struct udevice *bus, struct es_spi_priv *priv)
 
 static int spi_wait_over(struct es_spi_priv *priv)
 {
-	uint32_t register_data = 0;
 	while(es_read(priv, ES_SPI_CSR_06) & 0x1);
-	//check flash status register' busy bit to make sure operation is finish.
+	return 0;
+}
+
+static int spi_flash_idle(struct es_spi_priv *priv)
+{
+	uint32_t register_data = 0xff;
+	// check flash status register' busy bit to make sure operation is finish.
 	while (register_data & 0x1) {
 		es_read_flash_status_register(priv, (uint8_t *)&register_data, SPINOR_OP_RDSR);
 	}
@@ -1104,6 +1109,7 @@ void es_writer(struct es_spi_priv *priv)
 			spi_read_write_cfg(priv, write_size, (uintptr_t)offset);
 			spi_command_cfg(priv, cmd_code, cmd_type, SPI_COMMAND_MOVE_VALUE);
 			spi_wait_over(priv);
+			spi_flash_idle(priv);
 		}
 	}
 	while (size > 0) {
@@ -1120,6 +1126,7 @@ void es_writer(struct es_spi_priv *priv)
 		spi_command_cfg(priv, cmd_code, cmd_type, SPI_COMMAND_MOVE_DMA);
 		wait_spi_irq(priv);
 		wait_dma_irq(priv);
+		spi_flash_idle(priv);
 
 		wr_dest += write_size;
 		offset += write_size;
@@ -1448,7 +1455,7 @@ uint8_t es_read_flash_status_register(struct es_spi_priv *priv, uint8_t *registe
 	memset(buf, 0, sizeof(uint32_t));
 	flush_cache((unsigned long)buf, sizeof(uint32_t));
 
-	//Flash status register-2 is 1byte
+	//Flash status register is 1byte
 	spi_read_write_cfg(priv, 1, 0);
 	//Set SPI_FLASH_COMMAND
 	spi_command_cfg(priv, flash_cmd, SPIC_CMD_TYPE_READ_STATUS_REGISTER, SPI_COMMAND_MOVE_VALUE);
@@ -1458,7 +1465,7 @@ uint8_t es_read_flash_status_register(struct es_spi_priv *priv, uint8_t *registe
 	wait_dma_irq(priv);
 
 	memcpy(register_data, buf, sizeof(uint32_t));
-	// printf("[%s %d]: command 0x%x, status register_data 0x%x\n",__func__,__LINE__, flash_cmd, *register_data);
+	// printf("[%s %d]: command 0x%x, status register_data 0x%x buf 0x%x\n",__func__,__LINE__, flash_cmd, *register_data, *buf);
 	free(buf);
 	return 0;
 }
@@ -1478,6 +1485,7 @@ void es_write_flash_status_register(struct es_spi_priv *priv, uint32_t register_
 	//Wait command finish
 	wait_dma_irq(priv);
 	wait_spi_irq(priv);
+	spi_flash_idle(priv);
 	free(buf);
 	// printf("[%s %d]: command 0x%x, status register_data 0x%x\n",__func__,__LINE__, flash_cmd, register_data);
 }
@@ -1486,13 +1494,14 @@ void es_write_flash_global_block_lock_register(struct es_spi_priv *priv, int fla
 {
 
 	//Flash global block lock register not need data
-	spi_read_write_cfg(priv, 1, 0);
+	spi_read_write_cfg(priv, 0, 0);
 
 	spi_command_cfg(priv, flash_cmd, SPIC_CMD_TYPE_CHIP_ERASE, SPI_COMMAND_MOVE_VALUE);
 
 	//Wait command finish
 	spi_wait_over(priv);
-	//printf("[%s %d]: command 0x%x\n",__func__,__LINE__, command);
+	spi_flash_idle(priv);
+	// printf("[%s %d]: command 0x%x\n",__func__,__LINE__, flash_cmd);
 }
 
 void es_flash_global_wp_cfg(struct es_spi_priv *priv, int enable)
@@ -1612,6 +1621,9 @@ struct spi_flash *boot_flash = NULL;
 int bootspi_probe(char *node_name)
 {
 	struct udevice *bus, *dev;
+	if(boot_flash)
+		spi_flash_free(boot_flash);
+
 	boot_flash = NULL;
 	int ret = uclass_get_device_by_name(UCLASS_SPI, node_name, &bus);
 	if(ret) {
@@ -1751,11 +1763,13 @@ int es_bootspi_write_protection_init(void)
 {
 	if(!bootspi_probe("spi@51800000")) {
 		es_bootspi_wp_cfg(boot_flash, 1);
+		spi_flash_free(boot_flash);
 		boot_flash = NULL;
 	}
 
 	if(!bootspi_probe("spi@71800000")) {
 		es_bootspi_wp_cfg(boot_flash, 1);
+		spi_flash_free(boot_flash);
 		boot_flash = NULL;
 	}
 	return 0;

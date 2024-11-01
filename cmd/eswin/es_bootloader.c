@@ -195,6 +195,7 @@ int es_spi_flash_probe(u32 num)
 	if (flash)
 		spi_flash_free(flash);
 
+	flash = NULL;
 	ret = uclass_get_device_by_name(UCLASS_SPI, node_name, &bus);
 	if(ret) {
 		return ret;
