@@ -293,7 +293,7 @@ int eswin_pmp_init(void);
 
 #include <spi_flash.h>
 int es_bootspi_write_protection_init(void);
-void es_bootspi_wp_cfg(struct spi_flash *flash, int enable);
+int es_bootspi_wp_cfg(struct spi_flash *flash, int enable);
 int es_flash_region_wp_cfg(struct spi_flash *flash, void *addr, int size, bool lock);
 
 /* common/board_info.c */

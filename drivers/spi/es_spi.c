@@ -25,6 +25,7 @@
 #include <clk.h>
 #include <dm.h>
 #include <dm/device_compat.h>
+#include <dm/device-internal.h>
 #include <errno.h>
 #include <fdtdec.h>
 #include <log.h>
@@ -1564,7 +1565,7 @@ int es_flash_region_wp_cfg(struct spi_flash *flash, void *addr, int size, bool l
 	struct udevice *dev = flash->spi->dev->parent;
 	struct es_spi_priv *priv = dev_get_priv(dev);
 
-	if((uintptr_t)0x51800000 != priv->regs && (uintptr_t)0x71800000 != priv->regs)
+	if((uintptr_t)0x51800000 != (uintptr_t)priv->regs && (uintptr_t)0x71800000 != (uintptr_t)priv->regs)
 		return -3;
 	// Check if the address is 64KB aligned
 	if ((uintptr_t)addr % ALIGNMENT_SIZE != 0) {
@@ -1596,11 +1597,11 @@ int es_flash_region_wp_cfg(struct spi_flash *flash, void *addr, int size, bool l
 */
 extern void gpio_force(int num, int inout);
 extern void gpio_level_cfg(int index, int level);
-void es_bootspi_wp_cfg(struct spi_flash *flash, int enable)
+int es_bootspi_wp_cfg(struct spi_flash *flash, int enable)
 {
 	struct udevice *dev = flash->spi->dev->parent;
 	struct es_spi_priv *priv = dev_get_priv(dev);
-	if((uintptr_t)0x51800000 != priv->regs && (uintptr_t)0x71800000 != priv->regs)
+	if((uintptr_t)0x51800000 != (uintptr_t)priv->regs && (uintptr_t)0x71800000 != (uintptr_t)priv->regs)
 		return -1;
 
 	if (enable) {
@@ -1614,6 +1615,7 @@ void es_bootspi_wp_cfg(struct spi_flash *flash, int enable)
 	}
 
 	printf("Bootspi flash write protection %s\n", enable ? "enabled" : "disabled");
+	return 0;
 }
 
 
@@ -1654,7 +1656,7 @@ static int do_spi_flash_probe(int argc, char *const argv[])
 {
 	const char *node_name_d0 = "spi@51800000";
 	const char *node_name_d1 = "spi@71800000";
-	char *node_name = node_name_d0;
+	char *node_name = (char *)node_name_d0;
 	if (argc > 3) {
 		printf("Usage: bootspi probe <0|1>\n");
 		return CMD_RET_USAGE;
@@ -1666,7 +1668,7 @@ static int do_spi_flash_probe(int argc, char *const argv[])
 			return CMD_RET_USAGE;
 		}
 		if(dienum) {
-			node_name = node_name_d1;
+			node_name = (char *)node_name_d1;
 		}
 	}
 	return bootspi_probe(node_name);
