@@ -1,0 +1,6 @@
+EIC7700 Z530 BOARD
+M:  Xiang Xu <xuxiang@eswincomputing.com>
+S:  Maintained
+F:  board/eswin/eic7700_z530/
+F:  include/configs/eic7700_z530.h
+F:  configs/eic7700_z530_defconfig

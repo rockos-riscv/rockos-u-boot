@@ -3,7 +3,6 @@
  * ESWIN BURN IMAGE CMD driver
  *
  * Copyright 2024, Beijing ESWIN Computing Technology Co., Ltd.. All rights reserved.
- * SPDX-License-Identifier: GPL-2.0
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -57,13 +56,14 @@ static struct spi_flash *flash = NULL;
 static int flash_stg = 1;  // emmc : 1; flash : 0
 
 enum fw_offset {
-	FW_HEAD_OFFSET	    = 0x0UL,
-	PUBKEY_RSA_OFFSET	= 0x1000UL,
-	PUBKEY_ECC_OFFSET	= 0x2000UL,
-	D2D_FW_OFFSET		= 0x10000UL,
-	DDR_FW_OFFSET		= 0x100000UL,
-	FIRMWARE_OFFSET	    = 0x400000UL,
-	BOOTLOADER_OFFSET	= 0x480000UL
+	FW_HEAD_OFFSET	    = 0x0UL,		/* HEAD 4K */
+	PUBKEY_RSA_OFFSET	= 0x1000UL,		/* RSA 4K */
+	PUBKEY_ECC_OFFSET	= 0x2000UL,		/* ECC 4K */
+	D2D_FW_OFFSET		= 0x3000UL,		/* D2D 256K - 12K */
+	DDR_FW_OFFSET		= 0x40000UL,	/* DDR 1M */
+	FIRMWARE_OFFSET		= 0x140000UL,	/* FIRMWARE 512K*/
+	BOOTLOADER_OFFSET	= 0x1c0000UL,	/* BOOTLOADER 5M + 256K*/
+	RESERVE				= 0x700000UL	/* RESERVE to env and boardinfo*/
 };
 
 enum fw_id {

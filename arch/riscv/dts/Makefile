@@ -13,6 +13,7 @@ dtb-$(CONFIG_TARGET_ESWIN_EVB_EIC7700) += eic7700-evb.dtb
 dtb-$(CONFIG_TARGET_ESWIN_EVB_EIC7700) += eic7700-evb-a2.dtb
 dtb-$(CONFIG_TARGET_ESWIN_EVB_EIC7702) += eic7702-evb-a1.dtb
 dtb-$(CONFIG_TARGET_HIFIVE_PREMIER_P550) += eic7700-hifive-premier-p550.dtb
+dtb-$(CONFIG_TARGET_ESWIN_EIC7700_Z530) += eic7700-z530.dtb
 
 include $(srctree)/scripts/Makefile.dts
 

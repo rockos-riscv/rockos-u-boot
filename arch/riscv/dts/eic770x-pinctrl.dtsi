@@ -3,7 +3,6 @@
  * Device Tree Include file for pin control of Eswin EIC770x family SoC.
  *
  * Copyright 2024, Beijing ESWIN Computing Technology Co., Ltd.. All rights reserved.
- * SPDX-License-Identifier: GPL-2.0
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,7 +15,10 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Authors: Xiang Xu <xuxiang@eswincomputing.com>
  */
+
 #include <dt-bindings/interrupt-controller/irq.h>
 
 / {
@@ -1048,12 +1050,12 @@
 			// 		function = "gpio75_func";
 			// 	};
 			// };
-			// pinctrl_gpio76_default: gpio76-default{
-			// 	mux {
-			// 		groups = "gpio76_group";
-			// 		function = "gpio76_func";
-			// 	};
-			// };
+			pinctrl_gpio76_default: gpio76-default{
+				mux {
+					groups = "gpio76_group";
+					function = "gpio76_func";
+				};
+			};
 			// pinctrl_gpio77_default: gpio77-default{
 			// 	mux {
 			// 		groups = "gpio77_group";
