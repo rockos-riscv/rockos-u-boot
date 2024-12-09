@@ -367,6 +367,9 @@ struct eqos_priv {
     void *rx_pkt;
     bool started;
     bool reg_access_ok;
+    unsigned int dly_param_1000m[3];
+    unsigned int dly_param_100m[3];
+    unsigned int dly_param_10m[3];
 };
 
 
@@ -736,13 +739,13 @@ static int eqos_adjust_link(struct udevice *dev)
         speed_cfg = SPEED_1000M_CFG;
         ret = eqos_set_gmii_speed(dev);
 #ifdef UBOOT_USING_ETH0
-        writel(0x800c8023, (HSP_BASE_ADDR + ETH0_TXEN_RXDV_DLY));
-        writel(0x0c0c0c0c, (HSP_BASE_ADDR + ETH0_RXDATA_DLY));
-        writel(0x23232323, (HSP_BASE_ADDR + ETH0_TXDATA_DLY));
+        writel(eqos->dly_param_1000m[0], (HSP_BASE_ADDR + ETH0_TXDATA_DLY));
+        writel(eqos->dly_param_1000m[1], (HSP_BASE_ADDR + ETH0_TXEN_RXDV_DLY));
+        writel(eqos->dly_param_1000m[2], (HSP_BASE_ADDR + ETH0_RXDATA_DLY));
 #else
-        writel(0x80268025, (HSP_BASE_ADDR + ETH1_TXEN_RXDV_DLY));
-        writel(0x26262626, (HSP_BASE_ADDR + ETH1_RXDATA_DLY));
-        writel(0x25252525, (HSP_BASE_ADDR + ETH1_TXDATA_DLY));
+        writel(eqos->dly_param_1000m[0], (HSP_BASE_ADDR + ETH1_TXDATA_DLY));
+        writel(eqos->dly_param_1000m[1], (HSP_BASE_ADDR + ETH1_TXEN_RXDV_DLY));
+        writel(eqos->dly_param_1000m[2], (HSP_BASE_ADDR + ETH1_RXDATA_DLY));
 #endif
         break;
     case SPEED_100:
@@ -750,26 +753,26 @@ static int eqos_adjust_link(struct udevice *dev)
         speed_cfg = SPEED_100M_CFG;
         ret = eqos_set_mii_speed_100(dev);
 #ifdef UBOOT_USING_ETH0
-        writel(0x803f8050, (HSP_BASE_ADDR + ETH0_TXEN_RXDV_DLY));
-        writel(0x3f3f3f3f, (HSP_BASE_ADDR + ETH0_RXDATA_DLY));
-        writel(0x50505050, (HSP_BASE_ADDR + ETH0_TXDATA_DLY));
+        writel(eqos->dly_param_100m[0], (HSP_BASE_ADDR + ETH0_TXDATA_DLY));
+        writel(eqos->dly_param_100m[1], (HSP_BASE_ADDR + ETH0_TXEN_RXDV_DLY));
+        writel(eqos->dly_param_100m[2], (HSP_BASE_ADDR + ETH0_RXDATA_DLY));
 #else
-        writel(0x80588048, (HSP_BASE_ADDR + ETH1_TXEN_RXDV_DLY));
-        writel(0x58585858, (HSP_BASE_ADDR + ETH1_RXDATA_DLY));
-        writel(0x48484848, (HSP_BASE_ADDR + ETH1_TXDATA_DLY));
+        writel(eqos->dly_param_100m[0], (HSP_BASE_ADDR + ETH1_TXDATA_DLY));
+        writel(eqos->dly_param_100m[1], (HSP_BASE_ADDR + ETH1_TXEN_RXDV_DLY));
+        writel(eqos->dly_param_100m[2], (HSP_BASE_ADDR + ETH1_RXDATA_DLY));
 #endif
         break;
     case SPEED_10:
         en_calibration = false;
         speed_cfg = SPEED_10M_CFG;
 #ifdef UBOOT_USING_ETH0
-        writel(0x0, (HSP_BASE_ADDR + ETH0_TXEN_RXDV_DLY));
-        writel(0x0, (HSP_BASE_ADDR + ETH0_RXDATA_DLY));
-        writel(0x0, (HSP_BASE_ADDR + ETH0_TXDATA_DLY));
+        writel(eqos->dly_param_10m[0], (HSP_BASE_ADDR + ETH0_TXDATA_DLY));
+        writel(eqos->dly_param_10m[1], (HSP_BASE_ADDR + ETH0_TXEN_RXDV_DLY));
+        writel(eqos->dly_param_10m[2], (HSP_BASE_ADDR + ETH0_RXDATA_DLY));
 #else
-        writel(0x0, (HSP_BASE_ADDR + ETH1_TXEN_RXDV_DLY));
-        writel(0x0, (HSP_BASE_ADDR + ETH1_RXDATA_DLY));
-        writel(0x0, (HSP_BASE_ADDR + ETH1_TXDATA_DLY));
+        writel(eqos->dly_param_10m[0], (HSP_BASE_ADDR + ETH1_TXDATA_DLY));
+        writel(eqos->dly_param_10m[1], (HSP_BASE_ADDR + ETH1_TXEN_RXDV_DLY));
+        writel(eqos->dly_param_10m[2], (HSP_BASE_ADDR + ETH1_RXDATA_DLY));
 #endif
         ret = eqos_set_mii_speed_10(dev);
         break;
@@ -1601,6 +1604,22 @@ static int eqos_probe(struct udevice *dev)
     int hspdma_rst_ctrl;
 
     debug("%s(dev=%p):\n", __func__, dev);
+
+    ret = dev_read_u32_array(dev, "dly-param-1000m", eqos->dly_param_1000m, 3);
+    if (ret) {
+        pr_err("error:eth get dly-param-1000m failed, ret=%d\n", ret);
+        return ret;
+    }
+    ret = dev_read_u32_array(dev, "dly-param-100m", eqos->dly_param_100m, 3);
+    if (ret) {
+        pr_err("error:eth get dly-param-100m failed, ret=%d\n", ret);
+        return ret;
+    }
+    ret = dev_read_u32_array(dev, "dly-param-10m", eqos->dly_param_10m, 3);
+    if (ret) {
+        pr_err("error:eth get dly-param-10m failed, ret=%d\n", ret);
+        return ret;
+    }
 
     eqos->phy_reset_gpio = devm_gpiod_get_optional(dev, "rst", GPIOD_IS_OUT | GPIOD_ACTIVE_LOW);
     if (eqos->phy_reset_gpio) {
