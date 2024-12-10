@@ -14,7 +14,12 @@
 
 /* Environment options */
 #define BOOT_TARGET_DEVICES(func) \
+    func(NVME, nvme, 0) \
+    func(SATA, sata, 0) \
+    func(MMC, mmc, 1) \
     func(MMC, mmc, 0) \
+    func(USB, usb, 0) \
+    func(PXE, pxe, na) \
     func(DHCP, dhcp, na)
 
 #include <config_distro_bootcmd.h>
@@ -48,9 +53,5 @@
     "uuid_swap=5ebcaaf0-e098-43b9-beef-1f8deedd135e\0" \
     "partitions=name=boot,start=1MiB,size=2048MiB,type=${typeid_filesystem},uuid=${uuid_boot};name=swap,size=4096MiB,type=${typeid_swap},uuid=${uuid_swap};name=root,size=-,type=${typeid_filesystem},uuid=${uuid_root}\0" \
     "gpt_partition=gpt write mmc ${emmc_dev} $partitions\0"
-
-#undef CONFIG_BOOTCOMMAND
-#define CONFIG_BOOTCOMMAND \
-    "sysboot mmc ${emmc_dev}:${mmcbootpart} any $boot_conf_addr_r $boot_conf_file;"
 
 #endif /* __CONFIG_H */
