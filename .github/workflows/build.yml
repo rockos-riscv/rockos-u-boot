@@ -1,0 +1,98 @@
+name: rockos-uboot-build
+
+on:
+  push:
+    tags:
+      - '*'
+    branches:
+      - '*'
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * *"
+
+env:
+  mainline_toolchain: https://github.com/riscv-collab/riscv-gnu-toolchain/releases/download/2024.11.22
+  mainline_toolchain_file_name: riscv64-glibc-ubuntu-22.04-gcc-nightly-2024.11.22-nightly.tar.xz
+  wget_alias: 'wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 0'
+  ARCH: riscv
+  CROSS_COMPILE: riscv64-unknown-linux-gnu-
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: eic7700-evb
+            dt_name: eic7700-evb
+            config: eic7700_evb_defconfig
+
+          - name: eic7700-evb-a2
+            dt_name: eic7700-evb-a2
+            config: eic7700_evb_a2_defconfig
+
+          - name: eic7700-evb-a3
+            dt_name: eic7700-evb-a3
+            config: eic7700_evb_a2_defconfig
+
+          - name: hifive-p550
+            dt_name: eic7700-hifive-premier-p550
+            config: hifive_premier_p550_defconfig
+
+          - name: milkv-megrez
+            dt_name: eic7700-milkv-megrez
+            config: eic7700_evb_defconfig
+
+          - name: pine64-starpro64
+            dt_name: eic7700-pine64-starpro64
+            config: eic7700_evb_a2_defconfig
+
+          - name: eic7702-evb-a1
+            dt_name: eic7702-evb-a1
+            config: eic7702_evb_a1_defconfig
+
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Install software
+        run: |
+              sudo apt update && \
+              sudo apt install -y gdisk dosfstools g++-12-riscv64-linux-gnu build-essential \
+                                  libncurses-dev gawk flex bison openssl libssl-dev tree \
+                                  dkms libelf-dev libudev-dev libpci-dev libiberty-dev autoconf device-tree-compiler
+
+      - name: Checkout uboot
+        uses: actions/checkout@v4
+
+      - name: uboot compile
+        run: |
+              mkdir output
+              ${wget_alias} ${mainline_toolchain}/${mainline_toolchain_file_name}
+              tar -xvf ${mainline_toolchain_file_name} -C /opt
+              export PATH="/opt/riscv/bin:$PATH"
+
+              ${CROSS_COMPILE}gcc -v
+
+              pushd $PWD
+                make ${{ matrix.config }}
+                sed -i "s#eswin/eic7700-evb-a2.dtb#eswin/${{ matrix.dt_name }}.dtb#" .config
+                make -j$(nproc)
+                cp -av u-boot.bin ${GITHUB_WORKSPACE}/output/
+                cp -av u-boot.dtb ${GITHUB_WORKSPACE}/output/
+              popd
+              tree ${GITHUB_WORKSPACE}/output
+
+      - name: 'Upload Artifact'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rockos-uboot-${{ matrix.name }}-${{ matrix.dt_name }}
+          path: output/*
+          retention-days: 7
+
+      - name: 'Create release by tag'
+        uses: softprops/action-gh-release@v1
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        with:
+          files: output/*
+          token: ${{ secrets.GITHUB_TOKEN }}
