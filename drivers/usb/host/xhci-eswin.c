@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
+ * Generic DWC3 Glue layer
  *
  * Copyright 2024, Beijing ESWIN Computing Technology Co., Ltd.. All rights reserved.
- * SPDX-License-Identifier: GPL-2.0
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -166,7 +166,7 @@ static int dwc_usb_clk_init(void)
     writel(val, crg_regs + 0x41c);
 
     //enable scu_hsp_pclk
-    writel(0x80000023, crg_regs + 0x148);
+    writel(0x80000020, crg_regs + 0x148);
     writel(0xc0000000, crg_regs + 0x14c);
 
     //usb0 clk init

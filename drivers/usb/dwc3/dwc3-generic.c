@@ -2,9 +2,21 @@
 /*
  * Generic DWC3 Glue layer
  *
- * Copyright (C) 2016 - 2018 Xilinx, Inc.
+ * Copyright 2024, Beijing ESWIN Computing Technology Co., Ltd.. All rights reserved.
  *
- * Based on dwc3-omap.c.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 2.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Authors: yangwei <yangwei1@eswincomputing.com>
  */
 
 #include <common.h>
@@ -65,7 +77,7 @@ static int dwc_usb_clk_init(void)
         writel(val, crg_regs + 0x41c);
 
         //enable scu_hsp_pclk
-        writel(0x80000023, crg_regs + 0x148);
+        writel(0x80000020, crg_regs + 0x148);
         writel(0xc0000000, crg_regs + 0x14c);
 
         //usb0 clk init
