@@ -1,13 +1,27 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright 2024 Beijing ESWIN Computing Technology Co., Ltd.
  *
+ * Copyright 2024, Beijing ESWIN Computing Technology Co., Ltd.. All rights reserved.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, version 2.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Authors: Xiang Xu <xuxiang@eswincomputing.com>
  */
 
 #ifndef __EIC7700_COMMON_H
 #define __EIC7700_COMMON_H
 
-#define HARDWARE_BOARD_INFO_FLASH_MAIN_OFFSET	0xf80000
+#define HARDWARE_BOARD_INFO_FLASH_MAIN_OFFSET	(CONFIG_ENV_OFFSET + 0x80000)
 #define HARDWARE_BOARD_INFO_FLASH_BACKUP_OFFSET	(HARDWARE_BOARD_INFO_FLASH_MAIN_OFFSET + 1024 * 256)
 #define HARDWARE_BOARD_INFO_MAGIC_NUMBER 0x05454943
 

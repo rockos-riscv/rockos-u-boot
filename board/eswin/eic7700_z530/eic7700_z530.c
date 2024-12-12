@@ -38,9 +38,100 @@
 #include <dm/device-internal.h>
 #include <dm/pinctrl.h>
 #include <eswin/cpu.h>
+#include <eic7700_common.h>
 #ifdef CONFIG_ESWIN_UMBOX
 #include <eswin/eswin-umbox-srvc.h>
 #endif
+
+static int get_hardware_board_info(const char *node_name, HardwareBoardInfo_t *gHardware_Board_Info)
+{
+	HardwareBoardInfo_t gHardware_Board_InfoA;
+	HardwareBoardInfo_t gHardware_Board_InfoB;
+	struct spi_flash *flash = NULL;
+	struct udevice *bus, *dev;
+	uint64_t size = 0;
+	uint32_t crc32ChecksumA, crc32ChecksumB;
+	int ret;
+	bool flaga, flagb;
+	ret = uclass_get_device_by_name(UCLASS_SPI, node_name, &bus);
+	if(ret) {
+		return ret;
+	}
+	ret = spi_find_chip_select(bus, 0, &dev);
+	if(ret) {
+		printf("Invalid chip select :%d (err=%d)\n", 0, ret);
+		return ret;
+	}
+
+	if (!device_active(dev)) {
+		if(device_probe(dev))
+			return -1;
+	}
+	flash = dev_get_uclass_priv(dev);
+	if(!flash) {
+		printf("SPI dev_get_uclass_priv failed\n");
+		return -1;
+	}
+
+	size = sizeof(HardwareBoardInfo_t);
+	memset((uint8_t *)&gHardware_Board_InfoA, 0, size);
+	memset((uint8_t *)&gHardware_Board_InfoB, 0, size);
+	printf("Get board info from flash\n");
+	ret = spi_flash_read(flash, HARDWARE_BOARD_INFO_FLASH_MAIN_OFFSET, size, (void *)&gHardware_Board_InfoA);
+	if(ret) {
+		return ret;
+	}
+	ret = spi_flash_read(flash, HARDWARE_BOARD_INFO_FLASH_BACKUP_OFFSET, size, (void *)&gHardware_Board_InfoB);
+	if(ret) {
+		return ret;
+	}
+	crc32ChecksumA = crc32(0xffffffff,  (uint8_t *)&gHardware_Board_InfoA, sizeof(HardwareBoardInfo_t)-4);
+	crc32ChecksumB = crc32(0xffffffff,  (uint8_t *)&gHardware_Board_InfoB, sizeof(HardwareBoardInfo_t)-4);
+	flaga = crc32ChecksumA != gHardware_Board_InfoA.crc32Checksum || HARDWARE_BOARD_INFO_MAGIC_NUMBER != gHardware_Board_InfoA.magicNumber;
+	flagb = crc32ChecksumB != gHardware_Board_InfoB.crc32Checksum || HARDWARE_BOARD_INFO_MAGIC_NUMBER != gHardware_Board_InfoB.magicNumber;
+	if(flaga && flagb) {
+		printf("ERROR: There is no valid hardware board information!!!\r\n");
+		return -1;
+	} else if(flaga) {
+		memcpy(gHardware_Board_Info, &gHardware_Board_InfoB, size);
+	} else if(flagb) {
+		memcpy(gHardware_Board_Info, &gHardware_Board_InfoA, size);
+	} else {
+		if(gHardware_Board_InfoA.updateCount < gHardware_Board_InfoB.updateCount) {
+			memcpy(gHardware_Board_Info, &gHardware_Board_InfoB, size);
+		} else {
+			memcpy(gHardware_Board_Info, &gHardware_Board_InfoA, size);
+		}
+	}
+	return 0;
+}
+
+int hardware_info_env_set(void)
+{
+	uint8_t mac_addr[6];
+	const char *node_name = "spi@51800000";
+	HardwareBoardInfo_t gHardware_Board_Info;
+	uint64_t size = sizeof(HardwareBoardInfo_t);
+	memset((uint8_t *)&gHardware_Board_Info, 0, size);
+	if(get_hardware_board_info(node_name, &gHardware_Board_Info)) {
+		return 0;
+	}
+	memset(mac_addr, 0, 6);
+	if (!eth_env_get_enetaddr("ethaddr", mac_addr) && is_valid_ethaddr(gHardware_Board_Info.ethernetMAC1)) {
+		eth_env_set_enetaddr("ethaddr", gHardware_Board_Info.ethernetMAC1);
+	}
+	memset(mac_addr, 0, 6);
+	if (!eth_env_get_enetaddr("eth1addr", mac_addr) && is_valid_ethaddr(gHardware_Board_Info.ethernetMAC2)) {
+		eth_env_set_enetaddr("eth1addr", gHardware_Board_Info.ethernetMAC2);
+	}
+
+	char *boardSerialNumber = gHardware_Board_Info.boardSerialNumber;
+	printf("boardSerialNumber %s\n",boardSerialNumber);
+	env_set("fdtfile","eswin/eic7700-z530.dtb");
+
+	return 0;
+}
+
 
 int set_voltage_default(void)
 {
@@ -83,7 +174,11 @@ int misc_init_r(void)
 #if defined(CONFIG_ESWIN_SPI)
 	es_bootspi_write_protection_init();
 #endif
+	hardware_info_env_set();
 
+	if (NULL == env_get("fdtfile")) {
+		env_set("fdtfile","eswin/eic7700-z530.dtb");
+	}
 	uclass_get_device_by_name(UCLASS_VIDEO, "display-subsystem", &dev);
 
 	env_set_ulong("ram_size", (gd->ram_size / 1024 / 1024 / 1024));
