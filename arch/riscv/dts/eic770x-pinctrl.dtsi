@@ -1184,12 +1184,17 @@
 					bias-pull-down = <1>;
 				};
 			};
-			// pinctrl_gpio95_default: gpio95-default{
-			// 	mux {
-			// 		groups = "gpio95_group";
-			// 		function = "gpio95_func";
-			// 	};
-			// };
+			pinctrl_gpio95_default: gpio95-default{
+				mux {
+					groups = "gpio95_group";
+					function = "gpio95_func";
+				};
+				conf {
+					groups = "gpio95_group";
+					input-enable = <0>;
+					bias-pull-down = <1>;
+				};
+			};
 			// pinctrl_gpio96_default: gpio96-default{
 			// 	mux {
 			// 		groups = "gpio96_group";

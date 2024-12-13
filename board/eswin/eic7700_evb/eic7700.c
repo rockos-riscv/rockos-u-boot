@@ -36,6 +36,7 @@
 #include <u-boot/crc.h>
 #include <eic7700_common.h>
 #include <eswin/cpu.h>
+#include <asm/gpio.h>
 #ifdef CONFIG_ESWIN_UMBOX
 #include <eswin/eswin-umbox-srvc.h>
 #endif
@@ -133,11 +134,40 @@ int hardware_info_env_set(void)
 	else if(strstr(boardSerialNumber, "EIDS200B516")) {
 		env_set("fdtfile","eswin/eic7700-evb-a2.dtb");
 	}
+	else if(strstr(boardSerialNumber, "EIMSE00")) {
+		env_set("fdtfile","eswin/eic7700-evb-a3.dtb");
+		set_voltage_default();
+	}
 	return 0;
 }
 
+int set_voltage_default(void)
+{
+	ofnode node;
+	struct udevice *pinctrl;
+	struct gpio_desc desc;
 
-
+	node = ofnode_path("/config");
+	if (!ofnode_valid(node)) {
+		pr_err("Can't find /config node!\n");
+		return -EINVAL;
+	}
+	if(uclass_get_device(UCLASS_PINCTRL, 0, &pinctrl)) {
+		debug("%s: Cannot find pinctrl device\n", __func__);
+		return -EINVAL;
+	}
+	if(pinctrl_select_state(pinctrl, "default")) {
+		printf("Failed to set pinctrl state: %d\n", pinctrl_select_state(pinctrl, "default"));
+		return -EINVAL;
+	}
+	if(gpio_request_by_name_nodev(node, "power-gpios", 0, &desc,
+				   GPIOD_IS_OUT | GPIOD_IS_OUT_ACTIVE)) {
+		pr_err("Can't request  \"power-gpios\" !\n");
+		return -EINVAL;
+	}
+	dm_gpio_set_value(&desc, 0);
+	return 0;
+}
 
 int misc_init_r(void)
 {
@@ -155,7 +185,7 @@ int misc_init_r(void)
 	hardware_info_env_set();
 
 	if (NULL == env_get("fdtfile")) {
-		env_set("fdtfile","eswin/eic7700-evb-a2.dtb");
+		env_set("fdtfile","eswin/eic7700-evb-a3.dtb");
 	}
 	eswin_update_bootargs();
 	return 0;
