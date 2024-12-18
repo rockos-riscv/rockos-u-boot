@@ -60,7 +60,7 @@ int overwrite_console(void)
 
 /* Device name */
 #define DEVNAME			"usbkbd"
-
+#define MAX_KEY_BOARD	32
 /* Keyboard maps */
 static const unsigned char usb_kbd_numkey[] = {
 	'1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
@@ -557,11 +557,38 @@ static int usb_kbd_probe_dev(struct usb_device *dev, unsigned int ifnum)
 	return 1;
 }
 
+static u32 kbd_usb_bitmap = 0;
+static int kbd_get_id(void)
+{
+	int num = 0;
+	for(num =0; num < MAX_KEY_BOARD; num++)
+	{
+		if(0 == (kbd_usb_bitmap & (0x1 << num)))
+		{
+			kbd_usb_bitmap|= (0x1 << num);
+			return num;
+		}
+	}
+	return -1;
+}
+static int kbd_put_id(int id)
+{
+	if(id >= MAX_KEY_BOARD)
+	{
+		return -1;
+	}
+	else
+	{
+		kbd_usb_bitmap &= (~(0x1 << id));
+		return 0;
+	}
+}
 static int probe_usb_keyboard(struct usb_device *dev)
 {
 	char *stdinname;
 	struct stdio_dev usb_kbd_dev;
 	int error;
+	int id = 0;
 
 	/* Try probing the keyboard */
 	if (usb_kbd_probe_dev(dev, 0) != 1)
@@ -570,7 +597,21 @@ static int probe_usb_keyboard(struct usb_device *dev)
 	/* Register the keyboard */
 	debug("USB KBD: register.\n");
 	memset(&usb_kbd_dev, 0, sizeof(struct stdio_dev));
-	strcpy(usb_kbd_dev.name, DEVNAME);
+	id = kbd_get_id();
+	if(-1 == id)
+	{
+		printf("usb keyboard id has been used up\n");
+		return -EBUSY;
+
+	}
+	else if(0 == id)
+	{
+		strcpy(usb_kbd_dev.name, DEVNAME);
+	}
+	else
+	{
+		sprintf(usb_kbd_dev.name,"%s%d",DEVNAME,id);
+	}
 	usb_kbd_dev.flags =  DEV_FLAGS_INPUT;
 	usb_kbd_dev.getc = usb_kbd_getc;
 	usb_kbd_dev.tstc = usb_kbd_testc;
@@ -581,19 +622,19 @@ static int probe_usb_keyboard(struct usb_device *dev)
 
 	stdinname = env_get("stdin");
 #if CONFIG_IS_ENABLED(CONSOLE_MUX)
-	if (strstr(stdinname, DEVNAME) != NULL) {
+	if (strstr(stdinname, usb_kbd_dev.name) != NULL) {
 		error = iomux_doenv(stdin, stdinname);
 		if (error)
 			return error;
 	}
 #else
 	/* Check if this is the standard input device. */
-	if (!strcmp(stdinname, DEVNAME)) {
+	if (!strcmp(stdinname, usb_kbd_dev.name)) {
 		/* Reassign the console */
 		if (overwrite_console())
 			return 1;
 
-		error = console_assign(stdin, DEVNAME);
+		error = console_assign(stdin, usb_kbd_dev.name);
 		if (error)
 			return error;
 	}
@@ -639,22 +680,41 @@ int usb_kbd_deregister(int force)
 	struct stdio_dev *dev;
 	struct usb_device *usb_kbd_dev;
 	struct usb_kbd_pdata *data;
+	char full_name[STDIO_NAME_LEN];
+	int num = 0;
 
-	dev = stdio_get_by_name(DEVNAME);
-	if (dev) {
-		usb_kbd_dev = (struct usb_device *)dev->priv;
-		data = usb_kbd_dev->privptr;
-#if CONFIG_IS_ENABLED(CONSOLE_MUX)
-		if (iomux_replace_device(stdin, DEVNAME, force ? "nulldev" : ""))
-			return 1;
-#endif
-		if (stdio_deregister_dev(dev, force) != 0)
-			return 1;
-#ifdef CONFIG_SYS_USB_EVENT_POLL_VIA_INT_QUEUE
-		destroy_int_queue(usb_kbd_dev, data->intq);
-#endif
-		free(data->new);
-		free(data);
+	for(num = 0;num < MAX_KEY_BOARD;num++)
+	{
+		if(0 != (kbd_usb_bitmap & (0x1 << num)))
+		{
+
+			memset(full_name,0,STDIO_NAME_LEN);
+			if(0 == num)
+			{
+				strcpy(full_name, DEVNAME);
+			}
+			else
+			{
+				sprintf(full_name,"%s%d",DEVNAME,num);
+			}
+			dev = stdio_get_by_name(full_name);
+			if (dev) {
+				usb_kbd_dev = (struct usb_device *)dev->priv;
+				data = usb_kbd_dev->privptr;
+		#if CONFIG_IS_ENABLED(CONSOLE_MUX)
+				if (iomux_replace_device(stdin, full_name, force ? "nulldev" : ""))
+					return 1;
+		#endif
+				if (stdio_deregister_dev(dev, force) != 0)
+					return 1;
+		#ifdef CONFIG_SYS_USB_EVENT_POLL_VIA_INT_QUEUE
+				destroy_int_queue(usb_kbd_dev, data->intq);
+		#endif
+				free(data->new);
+				free(data);
+			}
+			kbd_put_id(num);
+		}
 	}
 
 	return 0;
@@ -680,30 +740,48 @@ static int usb_kbd_remove(struct udevice *dev)
 	struct usb_kbd_pdata *data;
 	struct stdio_dev *sdev;
 	int ret;
+	int id = 0;
 
-	sdev = stdio_get_by_name(DEVNAME);
-	if (!sdev) {
-		ret = -ENXIO;
-		goto err;
-	}
-	data = udev->privptr;
-#if CONFIG_IS_ENABLED(CONSOLE_MUX)
-	if (iomux_replace_device(stdin, DEVNAME, "nulldev")) {
-		ret = -ENOLINK;
-		goto err;
-	}
-#endif
-	if (stdio_deregister_dev(sdev, true)) {
-		ret = -EPERM;
-		goto err;
-	}
-#ifdef CONFIG_SYS_USB_EVENT_POLL_VIA_INT_QUEUE
-	destroy_int_queue(udev, data->intq);
-#endif
-	free(data->new);
-	free(data);
+	struct list_head *list = stdio_get_list();
+	struct list_head *pos;
+	list_for_each(pos, list) {
+		sdev = list_entry(pos, struct stdio_dev, list);
+		if(sdev->priv == udev)
+		{
+			sdev = stdio_get_by_name(sdev->name);
+			if (!sdev) {
+				ret = -ENXIO;
+				goto err;
+			}
+			if(strlen(DEVNAME) != strlen(sdev->name))
+			{
+				id = sdev->name[strlen(DEVNAME)] - '0';
+			}
+			kbd_put_id(id);
+			data = udev->privptr;
+		#if CONFIG_IS_ENABLED(CONSOLE_MUX)
+			if (iomux_replace_device(stdin, sdev->name, "nulldev")) {
+				ret = -ENOLINK;
+				goto err;
+			}
+		#endif
+			if (stdio_deregister_dev(sdev, true)) {
+				ret = -EPERM;
+				goto err;
+			}
+		#ifdef CONFIG_SYS_USB_EVENT_POLL_VIA_INT_QUEUE
+			destroy_int_queue(udev, data->intq);
+		#endif
+			free(data->new);
+			free(data);
 
-	return 0;
+			return 0;
+		}
+	}
+	printf("%s: warning, no %s in usb devs", __func__, dev->name);
+	return -ENODEV;
+
+
 err:
 	printf("%s: warning, ret=%d", __func__, ret);
 	return ret;
