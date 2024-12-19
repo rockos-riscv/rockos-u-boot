@@ -38,6 +38,7 @@
 #include <spi_flash.h>
 #include <fs.h>
 #include <dm/device-internal.h>
+#include <u-boot/crc.h>
 #include <eswin/esw_mkfs.h>
 #include <eic7700_common.h>
 
@@ -125,7 +126,7 @@ static int emmc_read_bootchain(uint64_t dst_addr, uint64_t offset, uint64_t size
 	int32_t ret;
 
 
-	debug_printf("bootchain_part_info start %lx  blksz %lx !\n", bootchain_part_info.start, bootchain_part_info.blksz);
+	debug_printf("bootchain_part_info start %llx  blksz %lx !\n", bootchain_part_info.start, bootchain_part_info.blksz);
 	addr = (void *)(dst_addr);
 
 	emmc_offset = DIV_ROUND_UP(offset, bootchain_part_info.blksz) + bootchain_part_info.start;
@@ -226,7 +227,6 @@ static int es_spi_flash_erase(uint64_t offset, uint64_t size)
 
 	debug_printf("offset : %llx, size %llx  flash->size %x\n",offset, size, flash->size);
 	total_size = DIV_ROUND_UP(size, 0x1000)*0x1000;
-
 	debug_printf("offset : %llx, size %llx\n",offset, size);
 
 	package_blk = DIV_ROUND_UP(total_size, BOOTCHAIN_PACKAGE_SIZE);  /* blkcnt */
@@ -282,20 +282,21 @@ int norflash_read_bootchain(uint64_t dst_addr, uint64_t offset, uint64_t size)
 static int norflash_write_bootchain(uint64_t src_addr, uint64_t offset, uint64_t size)
 {
 	int ret = 1;
+	uint32_t retry_count = 3;
 	uint64_t package_blk, total_size, write_size, currentIndex = 0;
+	uint32_t crc_raw = crc32(0, (void *)src_addr, size);
 
-	debug_printf("offset : %llx, size %llx\r\n",offset, size);
-
+	debug_printf("src_addr %llx offset : %llx, size %llx\r\n",src_addr, offset, size);
+retry:
 	es_bootspi_wp_cfg(flash, 0);
 	ret = es_spi_flash_erase(offset, size);
 	if(ret) {
 		es_bootspi_wp_cfg(flash, 1);
 		return ret;
 	}
-
 	package_blk = DIV_ROUND_UP(size, BOOTCHAIN_PACKAGE_SIZE); 
 	total_size = size;
-	printf("Write progress: %3d%%:\r", 0);
+	printf("\rWrite progress: %3d%%:\r", 0);
 	for(int i = 0;i < package_blk; i++) {
 		if(total_size > BOOTCHAIN_PACKAGE_SIZE)
 		{
@@ -313,7 +314,26 @@ static int norflash_write_bootchain(uint64_t src_addr, uint64_t offset, uint64_t
 		}
 		printf("\r");
 		if(ret)
-			break;
+			goto out;
+	}
+
+	char *cmp_buf = memalign(ARCH_DMA_MINALIGN, size);
+	if (cmp_buf) {
+		ret = spi_flash_read(flash, offset, size, (void *)cmp_buf);
+		if(ret)
+			goto out;
+		uint32_t crc_flash = crc32(0, cmp_buf, size);
+		if(crc_flash != crc_raw) {
+			retry_count--;
+			ret = -1;
+			printf("cmdbuf %x %x %x %x %x\r\n", cmp_buf[0],cmp_buf[1],cmp_buf[2],cmp_buf[3],cmp_buf[4]);
+			if(retry_count)
+				goto retry;
+		}
+	} else {
+		printf("check crc32 error!!!\r\n");
+		ret = -1;
+		goto out;
 	}
 
 	if(!ret) {
@@ -322,10 +342,11 @@ static int norflash_write_bootchain(uint64_t src_addr, uint64_t offset, uint64_t
 			printf("%s","+");
 		printf("\r\n");
 	}
-
+out:
 	printf("SF: 0x%lx bytes @ %#x Written: %s\r\n",
 		(size_t)size, (uint32_t)offset, ret?"ERROR":"OK");
 	es_bootspi_wp_cfg(flash, 1);
+	free(cmp_buf);
 
 	return ret == 0 ? 0 : 1;
 }
@@ -358,7 +379,7 @@ static int es_write_bootchain(uint64_t src_addr, uint64_t offset, uint64_t size)
 				return -1;
 			}
 		#endif
-		norflash_write_bootchain(src_addr, offset, size);
+		return norflash_write_bootchain(src_addr, offset, size);
 	}
 	return 0;
 }
@@ -517,7 +538,6 @@ static int do_bootchain_write(int argc, char *const argv[])
 				type_id = FIRMWARE_ID;
 				break;
 			default:
-				free(fht);
 				printf("Invalid image file type!\r\n");
 				return -ENXIO;
 		}
@@ -534,7 +554,7 @@ static int do_bootchain_write(int argc, char *const argv[])
 		debug_printf("payload_type %x!\r\n", payload_type);
 		debug_printf("dst_offset %llx!\r\n", dst_offset);
 		ret = es_write_bootchain(src_addr, dst_offset, size);
-		if(ret < 0){
+		if(ret){
 			return ret;
 		}
 	}
@@ -553,12 +573,12 @@ static int do_bootchain_write(int argc, char *const argv[])
 	{
 		if(fw_head_info[i].fw_valid_flag == 1)
 		{
-			memcpy(&fht->entries[cnt].version, &fw_head_info[i].entry_header, sizeof(struct firmware_entry_header_t));
-			cnt++;
+			memcpy(&fht->entries[cnt].version, &fw_head_info[i].entry_header.version, sizeof(struct firmware_entry_header_t));
 			debug_printf("\n\n*******************************\r\n");
 			debug_printf("fht entries %d key_index %x payload_type %x reserved1 %x Reserved2 %x\r\n",cnt, fht->entries[cnt].key_index, fht->entries[cnt].payload_type,\
 				fht->entries[cnt].reserved1, fht->entries[cnt].Reserved2);
 			debug_printf("\n******cnt %d************\r\n",cnt);
+			cnt++;
 		}
 	}
 
@@ -567,8 +587,7 @@ static int do_bootchain_write(int argc, char *const argv[])
 
 	ret = es_write_bootchain((uint64_t)&fht->magic, FW_HEAD_OFFSET, len);
 	free(fht);
-	if(ret < 0){
-		free(fht);
+	if(ret){
 		return ret;
 	}
 	printf("bootloader write OK\r\n");
@@ -612,7 +631,7 @@ static int do_bootchain_read(int argc, char *const argv[])
 		if(ret < 0)
 			return -ENOENT;
 	}else if (strcmp(argv[3], "flash") == 0){
-		ret = es_spi_flash_probe();
+		ret = es_spi_flash_probe(0);
 		if(ret < 0)
 			return -ENOENT;
 		flash_stg = 0;
@@ -1299,7 +1318,7 @@ static int do_esburn_bootchain(struct cmd_tbl *cmdtp, int flag, int argc,
 	}
 
 	// if (strcmp(cmd, "read") == 0)
-	// 	ret = do_bootchain_read(argc, argv);
+		// ret = do_bootchain_read(argc, argv);
 	if (strcmp(cmd, "write") == 0)
 		ret = do_bootchain_write(argc, argv);
 	else if (strcmp(cmd, "erase") == 0)

@@ -33,6 +33,7 @@
 #include <spi_flash.h>
 #include <dm/uclass-internal.h>
 #include <dm/device-internal.h>
+#include <dm/pinctrl.h>
 #include <u-boot/crc.h>
 #include <eic7700_common.h>
 #include <eswin/cpu.h>
@@ -41,6 +42,35 @@
 #include <eswin/eswin-umbox-srvc.h>
 #endif
 #include <fdt_support.h>
+
+
+int set_voltage_default(void)
+{
+	ofnode node;
+	struct udevice *pinctrl;
+	struct gpio_desc desc;
+
+	node = ofnode_path("/config");
+	if (!ofnode_valid(node)) {
+		pr_err("Can't find /config node!\n");
+		return -EINVAL;
+	}
+	if(uclass_get_device(UCLASS_PINCTRL, 0, &pinctrl)) {
+		debug("%s: Cannot find pinctrl device\n", __func__);
+		return -EINVAL;
+	}
+	if(pinctrl_select_state(pinctrl, "default")) {
+		printf("Failed to set pinctrl state: %d\n", pinctrl_select_state(pinctrl, "default"));
+		return -EINVAL;
+	}
+	if(gpio_request_by_name_nodev(node, "power-gpios", 0, &desc,
+				   GPIOD_IS_OUT | GPIOD_IS_OUT_ACTIVE)) {
+		pr_err("Can't request  \"power-gpios\" !\n");
+		return -EINVAL;
+	}
+	dm_gpio_set_value(&desc, 0);
+	return 0;
+}
 
 static int get_hardware_board_info(const char *node_name, HardwareBoardInfo_t *gHardware_Board_Info)
 {
@@ -104,6 +134,7 @@ static int get_hardware_board_info(const char *node_name, HardwareBoardInfo_t *g
 	}
 	return 0;
 }
+
 int hardware_info_env_set(void)
 {
 	uint8_t mac_addr[6];
@@ -138,34 +169,6 @@ int hardware_info_env_set(void)
 		env_set("fdtfile","eswin/eic7700-evb-a3.dtb");
 		set_voltage_default();
 	}
-	return 0;
-}
-
-int set_voltage_default(void)
-{
-	ofnode node;
-	struct udevice *pinctrl;
-	struct gpio_desc desc;
-
-	node = ofnode_path("/config");
-	if (!ofnode_valid(node)) {
-		pr_err("Can't find /config node!\n");
-		return -EINVAL;
-	}
-	if(uclass_get_device(UCLASS_PINCTRL, 0, &pinctrl)) {
-		debug("%s: Cannot find pinctrl device\n", __func__);
-		return -EINVAL;
-	}
-	if(pinctrl_select_state(pinctrl, "default")) {
-		printf("Failed to set pinctrl state: %d\n", pinctrl_select_state(pinctrl, "default"));
-		return -EINVAL;
-	}
-	if(gpio_request_by_name_nodev(node, "power-gpios", 0, &desc,
-				   GPIOD_IS_OUT | GPIOD_IS_OUT_ACTIVE)) {
-		pr_err("Can't request  \"power-gpios\" !\n");
-		return -EINVAL;
-	}
-	dm_gpio_set_value(&desc, 0);
 	return 0;
 }
 

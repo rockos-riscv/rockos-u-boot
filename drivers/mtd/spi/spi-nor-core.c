@@ -1007,15 +1007,15 @@ static int spi_nor_erase(struct mtd_info *mtd, struct erase_info *instr)
 		} else {
 			erase_opcode = nor->erase_opcode;
 			erasesize = mtd->erasesize;
-			if ( len >= 0x10000)
+			if (IS_ALIGNED(addr, SZ_64K) && len >= SZ_64K)
 			{
 				nor->erase_opcode = SPINOR_OP_SE;
-				mtd->erasesize = 0x10000;
+				mtd->erasesize = SZ_64K;
 			}
 			else
 			{
 				nor->erase_opcode = SPINOR_OP_BE_4K;
-				mtd->erasesize = 0x1000;
+				mtd->erasesize = SZ_4K;
 			}
 			ret = spi_nor_erase_sector(nor, addr);
 			nor->erase_opcode = erase_opcode;
