@@ -22,12 +22,7 @@
 
 #include <linux/sizes.h>
 
-#define CONFIG_STANDALONE_LOAD_ADDR 0x80200000
-
-/* Environment options */
-#define BOOT_TARGET_DEVICES(func) \
-    func(MMC, mmc, 0) \
-    func(DHCP, dhcp, na)
+#define CFG_MALLOC_F_ADDR   0xf0000000
 
 #include <config_distro_bootcmd.h>
 
