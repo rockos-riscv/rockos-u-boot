@@ -50,7 +50,7 @@
     "uuid_root=b0f77ad6-36cd-4a99-a8c0-31d73649aa08\0" \
     "uuid_swap=5ebcaaf0-e098-43b9-beef-1f8deedd135e\0" \
     "emmc_dev=0\0" \
-    "partitions=name=boot,start=1MiB,size=2048MiB,type=${typeid_filesystem};name=swap,size=4096MiB,type=${typeid_swap},uuid=${uuid_swap};name=root,size=-,type=${typeid_filesystem},uuid=${uuid_root};\0" \
+    "partitions=name=boot,start=1MiB,size=2048MiB,type=${typeid_filesystem},uuid=${uuid_boot};name=swap,size=4096MiB,type=${typeid_swap},uuid=${uuid_swap};name=root,size=-,type=${typeid_filesystem},uuid=${uuid_root}\0" \
     "gpt_partition=gpt write mmc ${emmc_dev} $partitions\0"
 
 #endif /* __CONFIG_H */
