@@ -34,7 +34,7 @@ jobs:
 
           - name: eic7700-evb-a3
             dt_name: eic7700-evb-a3
-            config: eic7700_evb_a2_defconfig
+            config: eic7700_evb_a3_defconfig
 
           - name: hifive-p550
             dt_name: eic7700-hifive-premier-p550
@@ -42,7 +42,7 @@ jobs:
 
           - name: milkv-megrez
             dt_name: eic7700-milkv-megrez
-            config: eic7700_evb_defconfig
+            config: eic7700_milkv_megrez_defconfig
 
           - name: pine64-starpro64
             dt_name: eic7700-pine64-starpro64
