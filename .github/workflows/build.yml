@@ -46,7 +46,7 @@ jobs:
 
           - name: pine64-starpro64
             dt_name: eic7700-pine64-starpro64
-            config: eic7700_evb_a2_defconfig
+            config: eic7700_starpro64_defconfig
 
           - name: eic7702-evb-a1
             dt_name: eic7702-evb-a1
