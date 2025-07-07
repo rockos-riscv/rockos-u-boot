@@ -375,7 +375,11 @@ static int eswin_sdhci_set_ios_post(struct sdhci_host *host)
 	if (host->mmc) {
 		if (host->mmc->ext_csd) {
 			if (host->mmc->ext_csd[EXT_CSD_RST_N_FUNCTION] == 0) {
+#if IS_ENABLED(MMC_SDHCI_EMMC_ESWIN_NO_HWRST)
+				ret = mmc_switch(host->mmc, EXT_CSD_CMD_SET_NORMAL, EXT_CSD_RST_N_FUNCTION, 2);
+#else
 				ret = mmc_switch(host->mmc, EXT_CSD_CMD_SET_NORMAL, EXT_CSD_RST_N_FUNCTION, 1);
+#endif
 				if (ret) {
 					printf("emmc: set reset n function failed!\n");
 				} else {
