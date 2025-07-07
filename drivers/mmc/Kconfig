@@ -514,6 +514,14 @@ config MMC_SDHCI_EMMC_ESWIN
         help
           This enables support for the Eswin SDHCI emmc controller.
 
+config MMC_SDHCI_EMMC_ESWIN_NO_HWRST
+	bool "Disable hardware reset pin for Eswin eMMC"
+	depends on MMC_SDHCI_EMMC_ESWIN
+	default n
+	help
+	  This disables hardware reset pin for Eswin SDHCI eMMC controller
+	  and disable it on cards.
+
 config MMC_SDHCI_SD_ESWIN
         bool "ESWIN SD controller support"
         select MMC_SDHCI_EMMC_ESWIN
