@@ -458,7 +458,7 @@ static int esburn_init_load_addr(uint64_t addr, uint64_t size)
 	return 0;
 }
 
-void defrag_move_cb(void *user_data, defrag_info_t *info)
+void defrag_move_cb(void *user_data, const defrag_info_t *info)
 {
 	uint8_t *fw_data = NULL;
 	printf("Defrag move: 0x%08lx => 0x%08lx, size=%zu\n",
@@ -500,7 +500,7 @@ static int check_boardloader_info(void)
 
 	memcpy(src_flash_info->entries, flash_entry, sizeof(flash_entry));
 	size = sizeof(src_flash_info->num_entries) + sizeof(flash_info_entry_t) * src_flash_info->num_entries;
-	uint32_t crc_src = crc32(0, &src_flash_info->num_entries, size);
+	uint32_t crc_src = crc32(0, (void*)&src_flash_info->num_entries, size);
 	src_flash_info->crc = crc_src;
 
 	// printf("SOURCE FLASH INFO : magic %x, num %d crc %x\n", src_flash_info->magic, src_flash_info->num_entries, crc_src);
@@ -518,7 +518,7 @@ static int check_boardloader_info(void)
 	}
 
 	size = sizeof(dst_flash_info->num_entries) + sizeof(flash_info_entry_t) * dst_flash_info->num_entries;
-	uint32_t crc_dst = crc32(0, &dst_flash_info->num_entries, size);
+	uint32_t crc_dst = crc32(0, (void*)&dst_flash_info->num_entries, size);
 
 	// printf("DST FLASH INFO : magic %x, num %d crc %x\n", dst_flash_info->magic, dst_flash_info->num_entries, crc_src);
 	// printf("DST FLASH size : num_entries %d, magic %d\n", sizeof(dst_flash_info->num_entries), sizeof(dst_flash_info->magic));
@@ -532,7 +532,7 @@ static int check_boardloader_info(void)
 	goto out;
 
 update:
-	es_write_bootchain(src_flash_info, BOOTLOAD_INFO_OFFSET, len);
+	es_write_bootchain((uint64_t)src_flash_info, BOOTLOAD_INFO_OFFSET, len);
 out:
 	free(src_flash_info);
 	free(dst_flash_info);
