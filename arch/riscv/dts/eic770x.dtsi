@@ -488,44 +488,16 @@
 			};
 		#endif
 		};
-		mswi0: mswi@02000000 {
-			status = "disabled";
-			compatible = "thead,c900-aclint-mswi";
-			interrupts-extended = <&cpu0_intc 3
-					       &cpu1_intc 3
-					       &cpu2_intc 3
-					       &cpu3_intc 3>;
-			reg = <0x0 0x02000000 0x0 0x04000>;
+		clint: timer@2000000 {
+			compatible = "eswin,eic7700-clint", "sifive,clint0";
+			reg = <0x0 0x02000000 0x0 0x10000>;
+			interrupts-extended =
+				<&cpu0_intc 3>, <&cpu0_intc 7>,
+				<&cpu1_intc 3>, <&cpu1_intc 7>,
+				<&cpu2_intc 3>, <&cpu2_intc 7>,
+				<&cpu3_intc 3>, <&cpu3_intc 7>;
 		};
-		mswi1: mswi@22000000 {
-			status = "disabled";
-			compatible = "thead,c900-aclint-mswi";
-			interrupts-extended = <&cpu4_intc 3
-					       &cpu5_intc 3
-					       &cpu6_intc 3
-					       &cpu7_intc 3>;
-			reg = <0x0 0x22000000 0x0 0x04000>;
-		};
-		mtimer0: mtimer@02004000 {
-			status = "disabled";
-			compatible = "thead,c900-aclint-mtimer";
-			interrupts-extended = <&cpu0_intc 7
-					       &cpu1_intc 7
-					       &cpu2_intc 7
-					       &cpu3_intc 7>;
-			reg = <0x0 0x0200bff8 0x0 0x00008
-			       0x0 0x02004000 0x0 0x07ff8>;
-		};
-		mtimer1: mtimer@22004000 {
-			status = "disabled";
-			compatible = "thead,c900-aclint-mtimer";
-			interrupts-extended = <&cpu0_intc 7
-					       &cpu1_intc 7
-					       &cpu2_intc 7
-					       &cpu3_intc 7>;
-			reg = <0x0 0x2200bff8 0x0 0x00008
-			       0x0 0x22004000 0x0 0x07ff8>;
-		};
+
 		plic0: interrupt-controller@c000000 {
 			status = "disabled";
 			#interrupt-cells = <1>;
@@ -625,21 +597,21 @@
 		};
 		uart0: serial@50900000 {
 			status = "disabled";
-			compatible = "synopsys,uart0";
+			compatible = "snps,dw-apb-uart";
 			clock-frequency = <200000000>;
+			reg-io-width = <4>;
+			reg-shift = <2>;
 			reg = <0x0 0x50900000 0x0 0xffff>;
 			reg-names = "control";
-			reg-shift = <2>;
-			reg-io-width = <2>;
 		};
 		uart1: serial@50910000 {
 			status = "disabled";
-			compatible = "synopsys,uart0";
+			compatible = "snps,dw-apb-uart";
 			clock-frequency = <200000000>;
+			reg-io-width = <4>;
+			reg-shift = <2>;
 			reg = <0x0 0x50910000 0x0 0xffff>;
 			reg-names = "control";
-			reg-shift = <2>;
-			reg-io-width = <2>;
 		};
 		eth0: ethernet@50400000 {
 			compatible = "eswin,eth-eqos";

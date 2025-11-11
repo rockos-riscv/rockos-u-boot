@@ -108,14 +108,6 @@
 	status = "okay";
 };
 
-&mswi0 {
-	status = "okay";
-};
-
-&mtimer0 {
-	status = "okay";
-};
-
 &plic0{
 	status = "okay";
 };
@@ -358,3 +350,10 @@
 		};
 	};
 };
+
+/delete-node/ &d1_pmp;
+/delete-node/ &d1_mbox_srvc;
+/delete-node/ &d1_mbox;
+/delete-node/ &d1_mbox_srvc1;
+/delete-node/ &d1_mbox1;
+/delete-node/ &plic1;
