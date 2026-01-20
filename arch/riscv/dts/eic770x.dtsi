@@ -28,7 +28,7 @@
 / {
 	#address-cells = <2>;
 	#size-cells = <2>;
-	compatible = "SiFive,FU800-dev", "fu800-dev", "sifive-dev";
+	compatible = "SiFive,FU800-dev", "fu800-dev", "sifive-dev", "eswin,eic7700";
 
 	cpus {
 		#address-cells = <1>;

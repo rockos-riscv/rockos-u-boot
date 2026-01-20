@@ -27,6 +27,7 @@
 	#address-cells = <2>;
 	#size-cells = <2>;
 	model = "Milk-V Megrez";
+	compatible = "eswin,eic7700";
 
 
 	aliases {

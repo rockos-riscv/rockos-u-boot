@@ -27,7 +27,7 @@
 	#address-cells = <2>;
 	#size-cells = <2>;
 	model = "Pine64 StarPro64";
-
+	compatible = "eswin,eic7700";
 
 	aliases {
 		serial0 = &uart0;
